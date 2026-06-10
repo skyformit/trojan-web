@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Supplier Registration AI Agent",
+  "description": "An interactive AI agent that guides suppliers through step-by-step registration with real-time document OCR extraction and government database verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

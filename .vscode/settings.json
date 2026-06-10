@@ -1,0 +1,8 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}",
+        ".vscode{,/**}"
+    ],
+    "appService.defaultWebAppToDeploy": "/subscriptions/53ddc12b-d090-4dbc-a029-89b9f0e0f551/resourceGroups/rg-ai-data-platform/providers/Microsoft.Web/sites/trojanagentic",
+    "appService.deploySubpath": "."
+}
