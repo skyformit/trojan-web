@@ -21,108 +21,8 @@ export default function AIAgentChat({
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [activeUploadType, setActiveUploadType] = useState<'trade_license' | 'vat_certificate' | 'bank_document' | null>('trade_license');
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationSeconds, setSimulationSeconds] = useState(10);
-  const [activeUploadFile, setActiveUploadFile] = useState<{ base64: string | null; mimeType: string } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let timer: any;
-    if (isSimulating && simulationSeconds > 0) {
-      timer = setTimeout(() => {
-        const nextSec = simulationSeconds - 1;
-        setSimulationSeconds(nextSec);
-        
-        // At key increments, append helpful progress logs to simulation conversation
-        if (nextSec === 8) {
-          setChatHistory(prev => [...prev, {
-            id: 'sim-log-8-' + Date.now(),
-            sender: 'system',
-            text: `Uploading document files...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } else if (nextSec === 6) {
-          setChatHistory(prev => [...prev, {
-            id: 'sim-log-6-' + Date.now(),
-            sender: 'system',
-            text: `Initiating model OCR visual extraction pattern scanner...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } else if (nextSec === 4) {
-          setChatHistory(prev => [...prev, {
-            id: 'sim-log-4-' + Date.now(),
-            sender: 'system',
-            text: `Parsed OCR values. Requesting real-time database verification for duplicate check...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } else if (nextSec === 2) {
-          setChatHistory(prev => [...prev, {
-            id: 'sim-log-2-' + Date.now(),
-            sender: 'system',
-            text: `Checking for the expiry date of document...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        }
-      }, 1000);
-    } else if (isSimulating && simulationSeconds === 0) {
-      finishSimulation();
-    }
-    return () => clearTimeout(timer);
-  }, [isSimulating, simulationSeconds]);
-
-  const startSimulation = (fileBase64: string | null = null, mimeType: string = 'image/png') => {
-    if (!activeUploadType || isSimulating) return;
-    setIsSimulating(true);
-    setSimulationSeconds(10);
-    setActiveUploadFile({ base64: fileBase64, mimeType });
-    
-    setChatHistory(prev => [...prev, {
-      id: 'sim-log-start-' + Date.now(),
-      sender: 'system',
-      text: `Initiated automated verification...`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }]);
-  };
-
-  const finishSimulation = async () => {
-    setIsSimulating(false);
-    if (!activeUploadType) return;
-
-    // Use current company if matched, otherwise default to AeroTech Solutions Ltd for premium look
-    const currentName = registrationState.companyName || "AeroTech Solutions Ltd";
-    const validNames = [
-      "AeroTech Solutions Ltd", 
-      "Global Logistics & Supply Chain Corp", 
-      "Pacific Agro Foods Co", 
-      "Apex Industrial Supplies LLC"
-    ];
-    let companyToUse = currentName;
-    if (!validNames.includes(currentName)) {
-      companyToUse = "AeroTech Solutions Ltd";
-      // Force match in state
-      setRegistrationState(prev => ({
-        ...prev,
-        companyName: companyToUse
-      }));
-    }
-
-    setChatHistory(prev => [...prev, {
-      id: 'sim-log-end-' + Date.now(),
-      sender: 'system',
-      text: `Verification checklist approved. Appending corporate credentials...`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }]);
-
-    await onAnalyzeDocument(
-      activeUploadType,
-      activeUploadFile?.base64 || null,
-      activeUploadFile?.mimeType || 'image/png',
-      { companyName: companyToUse }
-    );
-
-    setActiveUploadFile(null);
-  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -297,12 +197,11 @@ export default function AIAgentChat({
   const processFileUpload = async (file: File, type: 'trade_license' | 'vat_certificate' | 'bank_document') => {
     setIsUploading(true);
     
-    // Add temporary uploading log in chat
-    const logId = 'log-' + Date.now();
+    const logId = 'upload-' + Date.now();
     setChatHistory(prev => [...prev, {
       id: logId,
       sender: 'system',
-      text: `Uploading file "${file.name}" for ${type.replace(/_/g, ' ')} alignment...`,
+      text: `Preparing "${file.name}" for ${type.replace(/_/g, ' ')} validation...`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }]);
 
@@ -310,10 +209,41 @@ export default function AIAgentChat({
       const reader = new FileReader();
       reader.onload = async (event) => {
         const base64 = event.target?.result as string;
-        
+
+        try {
+          setChatHistory(prev => [...prev, {
+            id: 'upload-start-' + Date.now(),
+            sender: 'system',
+            text: `Validation request started for ${type.replace(/_/g, ' ')}. Sending file to the API...`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+
+          await onAnalyzeDocument(
+            type,
+            base64,
+            file.type,
+            { companyName: registrationState.companyName || 'AeroTech Solutions Ltd' }
+          );
+        } catch (error: any) {
+          setChatHistory(prev => [...prev, {
+            id: 'error-' + Date.now(),
+            sender: 'agent',
+            text: `Validation failed: ${error?.message || 'Unknown error'}.`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      reader.onerror = () => {
         setIsUploading(false);
-        // Automatically trigger simulation upon file load
-        startSimulation(base64, file.type);
+        setChatHistory(prev => [...prev, {
+          id: 'error-' + Date.now(),
+          sender: 'agent',
+          text: `Error reading "${file.name}". Please retry.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }]);
       };
       
       reader.readAsDataURL(file);
@@ -411,7 +341,7 @@ export default function AIAgentChat({
         {chatHistory.map((msg) => {
           if (msg.sender === 'system') {
             const isLatest = chatHistory[chatHistory.length - 1]?.id === msg.id;
-            const shouldSpin = isSimulating && isLatest;
+            const shouldSpin = isUploading && isLatest;
             return (
               <div key={msg.id} className="flex justify-center">
                 <div className={`text-[10px] py-1 px-3 rounded border flex items-center gap-2 ${
@@ -548,7 +478,7 @@ export default function AIAgentChat({
           onDragLeave={handleDrag}
           onDrop={handleDrop}
           className={`px-4 py-3.5 text-center border-t border-dashed transition-all ${
-            isSimulating 
+            isUploading 
               ? 'bg-indigo-50 border-indigo-300 text-indigo-700 animate-pulse'
               : dragActive 
                 ? 'bg-indigo-50 border-indigo-300 text-indigo-700' 
@@ -561,19 +491,13 @@ export default function AIAgentChat({
             onChange={handleFileChange}
             accept="image/*,application/pdf"
             className="hidden"
-            disabled={isSimulating}
+            disabled={isUploading}
           />
-          {isSimulating ? (
+          {isUploading ? (
             <div className="flex flex-col items-center justify-center gap-1.5 py-1">
               <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
                 <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
-                <span>Verification In Progress...</span>
-              </div>
-              <div className="w-full max-w-xs bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
-                <div 
-                  className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300" 
-                  style={{ width: `${(10 - simulationSeconds) * 10}%` }}
-                />
+                <span>Validation In Progress...</span>
               </div>
             </div>
           ) : (
@@ -605,18 +529,18 @@ export default function AIAgentChat({
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
           placeholder={
-            isSimulating
-              ? "Simulation in progress... please wait..."
+            isUploading
+              ? "Validation in progress... please wait..."
               : registrationState.currentStep === 'initial' 
                 ? "Type Company Name to begin..." 
                 : "Ask a verification question, or type response..."
           }
           className="flex-1 text-xs bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition"
-          disabled={isUploading || isSimulating}
+          disabled={isUploading}
         />
         <button
           onClick={() => handleSendMessage()}
-          disabled={!inputText.trim() || isUploading || isSimulating}
+          disabled={!inputText.trim() || isUploading}
           className="p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition"
         >
           <Send className="w-4 h-4" />

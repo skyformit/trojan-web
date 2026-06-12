@@ -16,6 +16,45 @@ export default function VerificationPanel({
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
 
+  const parseDocumentDateValue = (value?: string) => {
+    if (!value) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+
+    const numericMatch = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (numericMatch) {
+      const day = String(Number(numericMatch[1])).padStart(2, '0');
+      const month = String(Number(numericMatch[2])).padStart(2, '0');
+      return `${numericMatch[3]}-${month}-${day}`;
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+
+    return null;
+  };
+
+  const isDocumentExpired = (value?: string) => {
+    const normalized = parseDocumentDateValue(value);
+    if (!normalized) {
+      return false;
+    }
+
+    return new Date(`${normalized}T00:00:00Z`) < new Date();
+  };
+
   // Perform cross-document validation to make sure naming is fully aligned
   const getDocumentDiscrepancyCheck = () => {
     const findings: string[] = [];
@@ -33,11 +72,8 @@ export default function VerificationPanel({
     }
 
     // Expiry check
-    if (trade_license.extractedData?.expiryDate) {
-      const isExpired = new Date(trade_license.extractedData.expiryDate) < new Date();
-      if (isExpired) {
-        findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
-      }
+    if (trade_license.extractedData?.expiryDate && isDocumentExpired(trade_license.extractedData.expiryDate)) {
+      findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
     }
 
     return findings;
@@ -177,17 +213,229 @@ export default function VerificationPanel({
         {/* Registry compliance statement & action trigger */}
         <div className="pt-4 border-t border-slate-200">
           {score === 100 && discrepancies.length === 0 ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-green-50 border border-green-100 rounded text-xs text-green-800 leading-relaxed font-sans shadow-sm">
+            <div className="space-y-5">
+              <div className="p-4 bg-green-50 border border-green-150 rounded-lg text-xs text-green-800 leading-relaxed font-sans shadow-xs">
                 <div className="flex items-center gap-2 mb-1.5 font-bold text-green-700 uppercase tracking-wider text-[10px]">
-                  <UserCheck className="w-4 h-4" />
-                  <span>Onboarding Authorization Complete</span>
+                  <UserCheck className="w-4 h-4 text-green-600" />
+                  <span>Onboarding Credentials Approved</span>
                 </div>
-                AI Agent validation confirm that all document IDs are globally validated. The supplier's credentials correspond cleanly. Notification will be sent to customer for the same.
+                AI Agent validation confirms that all document IDs are globally validated. Under Trojan General Contracting onboarding protocol, please complete the commercial and operational survey below to publish your submission.
               </div>
+
+              {/* Infrastructure & Capabilities Survey Section */}
+              <div id="registration-survey-form" className="bg-slate-50 border border-slate-200 rounded-lg p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Business Profile & Capacity</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRegistrationState(prev => ({
+                        ...prev,
+                        yearsInBusiness: '5 to 10',
+                        totalStaff: '50 to 100',
+                        totalLabors: '100 Plus',
+                        totalEngineers: '0 to 50',
+                        testingFacility: 'Yes',
+                        clientConsultantListings: '5 to 10',
+                        projectsLast3Years: '10 to 20',
+                        biggestProjectValue: '100k to 500k',
+                        annualTurnover: '10m to 50m',
+                        factoryAssetValue: '10m to 50m'
+                      }));
+                    }}
+                    className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest hover:text-indigo-800 transition-colors pointer-events-auto cursor-pointer"
+                  >
+                    ⚡ Fast Prefill Answers
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label htmlFor="survey-years-in-business" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Years in business</label>
+                    <select
+                      id="survey-years-in-business"
+                      value={registrationState.yearsInBusiness || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, yearsInBusiness: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 5">0 to 5</option>
+                      <option value="5 to 10">5 to 10</option>
+                      <option value="10 Plus">10 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-total-staff" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total number of staff</label>
+                    <select
+                      id="survey-total-staff"
+                      value={registrationState.totalStaff || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, totalStaff: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 50">0 to 50</option>
+                      <option value="50 to 100">50 to 100</option>
+                      <option value="100 Plus">100 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-total-labors" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total number of labors</label>
+                    <select
+                      id="survey-total-labors"
+                      value={registrationState.totalLabors || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, totalLabors: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 50">0 to 50</option>
+                      <option value="50 to 100">50 to 100</option>
+                      <option value="100 Plus">100 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-total-engineers" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Engineers among staff</label>
+                    <select
+                      id="survey-total-engineers"
+                      value={registrationState.totalEngineers || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, totalEngineers: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 50">0 to 50</option>
+                      <option value="50 to 100">50 to 100</option>
+                      <option value="100 Plus">100 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-testing-facility" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Testing facility availability</label>
+                    <select
+                      id="survey-testing-facility"
+                      value={registrationState.testingFacility || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, testingFacility: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-client-listings" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Listed client/consultants</label>
+                    <select
+                      id="survey-client-listings"
+                      value={registrationState.clientConsultantListings || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, clientConsultantListings: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 5">0 to 5</option>
+                      <option value="5 to 10">5 to 10</option>
+                      <option value="10 Plus">10 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-projects-3yr" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Projects (Last 3 years)</label>
+                    <select
+                      id="survey-projects-3yr"
+                      value={registrationState.projectsLast3Years || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, projectsLast3Years: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 10">0 to 10</option>
+                      <option value="10 to 20">10 to 20</option>
+                      <option value="20 Plus">20 Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-biggest-project" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value of biggest project</label>
+                    <select
+                      id="survey-biggest-project"
+                      value={registrationState.biggestProjectValue || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, biggestProjectValue: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 100k">0 to 100k</option>
+                      <option value="100k to 500k">100k to 500k</option>
+                      <option value="500k Plus">500k Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-annual-turnover" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Annual Turnover</label>
+                    <select
+                      id="survey-annual-turnover"
+                      value={registrationState.annualTurnover || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, annualTurnover: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 10m">0 to 10m</option>
+                      <option value="10m to 50m">10m to 50m</option>
+                      <option value="50m Plus">50m Plus</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-factory-asset" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value of factory asset</label>
+                    <select
+                      id="survey-factory-asset"
+                      value={registrationState.factoryAssetValue || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, factoryAssetValue: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="0 to 10m">0 to 10m</option>
+                      <option value="10m to 50m">10m to 50m</option>
+                      <option value="50m Plus">50m Plus</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Complete & Submit Button */}
+              {!(
+                registrationState.yearsInBusiness &&
+                registrationState.totalStaff &&
+                registrationState.totalLabors &&
+                registrationState.totalEngineers &&
+                registrationState.testingFacility &&
+                registrationState.clientConsultantListings &&
+                registrationState.projectsLast3Years &&
+                registrationState.biggestProjectValue &&
+                registrationState.annualTurnover &&
+                registrationState.factoryAssetValue
+              ) ? (
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded text-[11px] text-amber-700 font-medium">
+                  Please answer all survey fields to authorize profile publication.
+                </div>
+              ) : null}
+
               <button
                 onClick={onSubmitRegistration}
-                className="w-full bg-slate-900 hover:bg-black text-white text-xs font-bold py-4 rounded-sm flex items-center justify-center gap-2 transition uppercase tracking-widest"
+                disabled={
+                  !(
+                    registrationState.yearsInBusiness &&
+                    registrationState.totalStaff &&
+                    registrationState.totalLabors &&
+                    registrationState.totalEngineers &&
+                    registrationState.testingFacility &&
+                    registrationState.clientConsultantListings &&
+                    registrationState.projectsLast3Years &&
+                    registrationState.biggestProjectValue &&
+                    registrationState.annualTurnover &&
+                    registrationState.factoryAssetValue
+                  )
+                }
+                className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold py-4 rounded-sm flex items-center justify-center gap-2 transition uppercase tracking-widest pointer-events-auto cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>Complete & Publish Supplier Registration</span>
@@ -210,12 +458,16 @@ export default function VerificationPanel({
   const renderDocumentDetailsTab = (
     doc: DocumentVerification,
     title: string,
-    fieldsDef: Array<{ key: string; label: string }>
+    fieldsDef: Array<{ key: string; label: string }>,
+    headerBadge?: React.ReactNode
   ) => {
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h4 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title} Details</h4>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title} Details</h4>
+            {headerBadge}
+          </div>
           {getDocStatusBadge(doc)}
         </div>
 
@@ -235,7 +487,7 @@ export default function VerificationPanel({
                   <div key={def.key} className="border-b border-slate-200 pb-1.5">
                     <span className="block text-[9px] uppercase font-bold text-slate-400">{def.label}:</span>
                     <span className="text-xs font-bold text-slate-800 font-mono">
-                      {doc.extractedData?.[def.key] || 'N/A'}
+                      {doc.extractedData?.[def.key] || (def.key === 'vatNumber' ? doc.extractedData?.taxRegistrationNumber : '') || 'N/A'}
                     </span>
                   </div>
                 ))}
@@ -311,8 +563,13 @@ export default function VerificationPanel({
           { key: 'companyName', label: 'Extracted Company' },
           { key: 'expiryDate', label: 'Expiry Date' },
           { key: 'manager', label: 'Manager / Owner' },
-          { key: 'activity', label: 'Covered Activities' }
-        ]
+          { key: 'licensedActivities', label: 'Licensed Activities' }
+        ],
+        trade_license.extractedData?.expiryDate && isDocumentExpired(trade_license.extractedData.expiryDate) ? (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border border-rose-200 bg-rose-50 text-rose-700">
+            Expired on {trade_license.extractedData.expiryDate}
+          </span>
+        ) : null
       )}
       {activeTab === 'vat' && renderDocumentDetailsTab(
         vat_certificate,

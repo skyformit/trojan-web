@@ -18,8 +18,3 @@ View your app in AI Studio: https://ai.studio/apps/9e8be104-f5f4-4555-8af9-15579
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
-
-## Cloudflare Pages
-
-This repo now includes Cloudflare Pages Functions under `functions/api/*` for the `/api/*` routes used by the frontend.
-Deploying only the Vite static bundle will break `POST /api/analyze-document` and `POST /api/verify-government`; Cloudflare needs the `functions` directory in the same deployment.

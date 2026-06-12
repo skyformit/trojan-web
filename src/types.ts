@@ -46,6 +46,16 @@ export interface SupplierRegistrationState {
   };
   currentStep: 'initial' | 'contact_info' | 'trade_license_upload' | 'vat_upload' | 'bank_document_upload' | 'review' | 'completed';
   status: 'draft' | 'pending' | 'verified' | 'rejected';
+  yearsInBusiness?: string;
+  totalStaff?: string;
+  totalLabors?: string;
+  totalEngineers?: string;
+  testingFacility?: string;
+  clientConsultantListings?: string;
+  projectsLast3Years?: string;
+  biggestProjectValue?: string;
+  annualTurnover?: string;
+  factoryAssetValue?: string;
 }
 
 export interface GovernmentRegistryRecord {

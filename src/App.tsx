@@ -39,7 +39,17 @@ const initialRegistrationState: SupplierRegistrationState = {
     bankDocumentVerified: false
   },
   currentStep: 'initial',
-  status: 'draft'
+  status: 'draft',
+  yearsInBusiness: '',
+  totalStaff: '',
+  totalLabors: '',
+  totalEngineers: '',
+  testingFacility: '',
+  clientConsultantListings: '',
+  projectsLast3Years: '',
+  biggestProjectValue: '',
+  annualTurnover: '',
+  factoryAssetValue: ''
 };
 
 export default function App() {
@@ -228,7 +238,7 @@ export default function App() {
                 ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)." 
                 : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
             }`
-          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **OCR Extracted Name**: "${extracted.companyName || 'N/A'}"\n- **Reason**: ${verifyData.details}\n\nOur system detected that this document is either expired, has mismatched corporate identifiers, or its numbers do not exist in our registries. Please ensure you upload a correct document.`
+          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **OCR Extracted Name**: "${extracted.companyName || 'N/A'}"\n- **Reason**: ${verifyData.details || 'Document verification failed.'}`
       );
 
     } catch (err: any) {
@@ -415,6 +425,20 @@ export default function App() {
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Trade License:</strong> TL_2024_GlobalTech.pdf <span className="text-emerald-600 ml-1 font-bold">(ACTIVE)</span></p>
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">VAT Account:</strong> Registered contributor status</p>
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Corporate Bank Account:</strong> Authoritative Verification Complete <span className="text-indigo-600 ml-1 font-bold">(AUTHORIZED)</span></p>
+              {registrationState.yearsInBusiness && (
+                <div className="border-t border-slate-200 pt-3 mt-3 font-sans text-slate-700 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Years in Business</span><strong className="text-slate-800 text-xs">{registrationState.yearsInBusiness}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Total Staff</span><strong className="text-slate-800 text-xs">{registrationState.totalStaff}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Total Labors</span><strong className="text-slate-800 text-xs">{registrationState.totalLabors}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Engineers among Staff</span><strong className="text-slate-800 text-xs">{registrationState.totalEngineers}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Testing Facility Available</span><strong className="text-slate-800 text-xs">{registrationState.testingFacility}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Product Listing Coverage</span><strong className="text-slate-800 text-xs">{registrationState.clientConsultantListings} client(s)/consultant(s)</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Projects executed (last 3y)</span><strong className="text-slate-800 text-xs">{registrationState.projectsLast3Years}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Biggest Project (last 3y)</span><strong className="text-slate-800 text-xs">{registrationState.biggestProjectValue}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Annual Turnover</span><strong className="text-slate-800 text-xs">{registrationState.annualTurnover}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Factory Asset Value</span><strong className="text-slate-800 text-xs">{registrationState.factoryAssetValue}</strong></div>
+                </div>
+              )}
             </div>
 
             <button
