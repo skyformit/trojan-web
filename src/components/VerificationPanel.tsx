@@ -68,7 +68,7 @@ export default function VerificationPanel({
     }
 
     if (tradeName && bankDocName && tradeName.toLowerCase().replace(/[^a-z0-9]/g, '') !== bankDocName.toLowerCase().replace(/[^a-z0-9]/g, '')) {
-      findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match Bank Document Beneficiary Name ("${bankDocName}")`);
+      findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match Bank Letter Company Name ("${bankDocName}")`);
     }
 
     // Expiry check
@@ -585,9 +585,7 @@ export default function VerificationPanel({
         bank_document,
         'Official Bank Document',
         [
-          { key: 'bankAccountNumber', label: 'Account Number/IBAN' },
-          { key: 'bankName', label: 'Financial Institution' },
-          { key: 'companyName', label: 'Beneficiary Name' },
+          { key: 'companyName', label: 'Company Name from Bank Letter' },
           { key: 'status', label: 'Account Standing' }
         ]
       )}

@@ -398,17 +398,15 @@ app.post("/api/verify-government", (req, res) => {
     }
 
     if (documentType === "bank_document") {
-      const bankAccountNumber = (extractedFields.bankAccountNumber || "").trim();
-      const bankName = (extractedFields.bankName || "").trim();
       const companyName = (extractedFields.companyName || "").trim();
 
-      if (bankAccountNumber && bankName) {
+      if (companyName) {
         return res.json({
           status: "success",
           matched: true,
           registeredName: companyName || "Verified Bank Document",
           registryStatus: "ACTIVE",
-          details: `Validated bank document from OCR fields. Bank Account: ${bankAccountNumber}. Bank Name: ${bankName}.`,
+          details: `Validated bank document from OCR fields. Company Name: ${companyName}.`,
           registryRecord: {
             companyName: companyName || "Verified Bank Document",
             postalAddress: "Document-Only Validation",
@@ -422,7 +420,7 @@ app.post("/api/verify-government", (req, res) => {
         status: "success",
         matched: false,
         registryStatus: "NOT_FOUND",
-        details: "Bank document is missing the bank account number or bank name OCR field.",
+        details: "Bank document is missing the company name OCR field.",
       });
     }
 

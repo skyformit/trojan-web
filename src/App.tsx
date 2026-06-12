@@ -520,8 +520,8 @@ export default function App() {
                         <span className="font-semibold">{record.vatNumber}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] font-bold uppercase text-slate-400">Bank Account No:</span>
-                        <span className="font-semibold">{record.bankAccountNumber}</span>
+                        <span className="block text-[8px] font-bold uppercase text-slate-400">Bank Letter Company Name:</span>
+                        <span className="font-semibold">{record.companyName}</span>
                       </div>
                     </div>
 
