@@ -133,9 +133,12 @@ export default function App() {
               ...doc,
               status: 'ocr_completed',
               extractedData: extracted,
+              processingTimeMs: analyzeData.processingTimeMs,
+              processingTime: analyzeData.processingTime,
               validationLogs: [
                 ...doc.validationLogs,
                 `Clean fields successfully populated.`,
+                `Processing Time: ${analyzeData.processingTime || (typeof analyzeData.processingTimeMs === 'number' ? `${(analyzeData.processingTimeMs / 1000).toFixed(2)}s` : 'N/A')}`,
                 `Company Name matched: "${extracted.companyName || 'N/A'}"`,
                 `Identification ID parsed: "${Object.values(extracted)[0] || 'N/A'}"`,
                 `Requesting real-time validation from State Business Registrar database APIs...`
@@ -168,7 +171,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentType: type,
-          extractedFields: extracted
+          extractedFields: extracted,
+          enteredCompanyName: registrationState.companyName
         })
       });
 
@@ -238,7 +242,7 @@ export default function App() {
                 ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)." 
                 : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
             }`
-          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **OCR Extracted Name**: "${extracted.companyName || 'N/A'}"\n- **Reason**: ${verifyData.details || 'Document verification failed.'}`
+          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **OCR Extracted Name**: "${extracted.companyName || 'N/A'}"\n- **Reason**: ${verifyData.details}\n\nOur system detected that this document is either expired, has mismatched corporate identifiers, or its numbers do not exist in our registries. Please ensure you upload a correct document.`
       );
 
     } catch (err: any) {
@@ -520,8 +524,8 @@ export default function App() {
                         <span className="font-semibold">{record.vatNumber}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] font-bold uppercase text-slate-400">Bank Letter Company Name:</span>
-                        <span className="font-semibold">{record.companyName}</span>
+                        <span className="block text-[8px] font-bold uppercase text-slate-400">Bank Account No:</span>
+                        <span className="font-semibold">{record.bankAccountNumber}</span>
                       </div>
                     </div>
 

@@ -19,6 +19,8 @@ export interface DocumentVerification {
   status: 'empty' | 'verifying' | 'ocr_completed' | 'registry_check' | 'verified' | 'failed';
   extractedData?: Record<string, string>;
   validationLogs: string[];
+  processingTimeMs?: number;
+  processingTime?: string;
   registryMatch?: {
     matched: boolean;
     registeredName?: string;

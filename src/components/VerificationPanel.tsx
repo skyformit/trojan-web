@@ -16,43 +16,50 @@ export default function VerificationPanel({
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
 
-  const parseDocumentDateValue = (value?: string) => {
+  const normalizeCompanyName = (value?: string) => {
     if (!value) {
-      return null;
+      return '';
     }
 
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
+    let normalized = value.toUpperCase();
+    normalized = normalized.replace(/[\(\)\[\],.;\-_/]/g, ' ');
+    normalized = normalized.replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/g, ' ');
+    normalized = normalized.replace(/\bC\s*\.?\s*O\s*\.?\b/g, ' ');
+    normalized = normalized.replace(/\bCO\b/g, ' ');
+    normalized = normalized.replace(/\bLIMITED\b/g, ' ');
+    normalized = normalized.replace(/\bLTD\b/g, ' ');
+    normalized = normalized.replace(/\bCORP\b/g, ' ');
+    normalized = normalized.replace(/\bINC\b/g, ' ');
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+
+    const tokens = normalized.split(' ');
+    for (let size = Math.floor(tokens.length / 2); size >= 1; size -= 1) {
+      if (tokens.length % size !== 0) {
+        continue;
+      }
+
+      const reference = tokens.slice(0, size).join(' ');
+      let repeated = true;
+      for (let index = size; index < tokens.length; index += size) {
+        const candidate = tokens.slice(index, index + size).join(' ');
+        if (candidate !== reference) {
+          repeated = false;
+          break;
+        }
+      }
+
+      if (repeated) {
+        return reference;
+      }
     }
 
-    const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
-    if (isoMatch) {
-      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-    }
-
-    const numericMatch = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-    if (numericMatch) {
-      const day = String(Number(numericMatch[1])).padStart(2, '0');
-      const month = String(Number(numericMatch[2])).padStart(2, '0');
-      return `${numericMatch[3]}-${month}-${day}`;
-    }
-
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10);
-    }
-
-    return null;
+    return normalized;
   };
 
-  const isDocumentExpired = (value?: string) => {
-    const normalized = parseDocumentDateValue(value);
-    if (!normalized) {
-      return false;
-    }
-
-    return new Date(`${normalized}T00:00:00Z`) < new Date();
+  const companyNamesMatch = (left?: string, right?: string) => {
+    const normalizedLeft = normalizeCompanyName(left);
+    const normalizedRight = normalizeCompanyName(right);
+    return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
   };
 
   // Perform cross-document validation to make sure naming is fully aligned
@@ -63,17 +70,20 @@ export default function VerificationPanel({
     const vatName = vat_certificate.extractedData?.companyName;
     const bankDocName = bank_document.extractedData?.companyName;
 
-    if (tradeName && vatName && tradeName.toLowerCase().replace(/[^a-z0-9]/g, '') !== vatName.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+    if (tradeName && vatName && !companyNamesMatch(tradeName, vatName)) {
       findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match VAT Corporate Name ("${vatName}")`);
     }
 
-    if (tradeName && bankDocName && tradeName.toLowerCase().replace(/[^a-z0-9]/g, '') !== bankDocName.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+    if (tradeName && bankDocName && !companyNamesMatch(tradeName, bankDocName)) {
       findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match Bank Letter Company Name ("${bankDocName}")`);
     }
 
     // Expiry check
-    if (trade_license.extractedData?.expiryDate && isDocumentExpired(trade_license.extractedData.expiryDate)) {
-      findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
+    if (trade_license.extractedData?.expiryDate) {
+      const isExpired = new Date(trade_license.extractedData.expiryDate) < new Date();
+      if (isExpired) {
+        findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
+      }
     }
 
     return findings;
@@ -187,6 +197,11 @@ export default function VerificationPanel({
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                       {doc.extractedData ? `No: ${Object.values(doc.extractedData)[0] || 'Unknown'}` : 'Not provided yet'}
                     </p>
+                    {doc.processingTime && (
+                      <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider mt-0.5">
+                        Processing time: {doc.processingTime}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {getDocStatusBadge(doc)}
@@ -458,16 +473,12 @@ export default function VerificationPanel({
   const renderDocumentDetailsTab = (
     doc: DocumentVerification,
     title: string,
-    fieldsDef: Array<{ key: string; label: string }>,
-    headerBadge?: React.ReactNode
+    fieldsDef: Array<{ key: string; label: string }>
   ) => {
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title} Details</h4>
-            {headerBadge}
-          </div>
+          <h4 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title} Details</h4>
           {getDocStatusBadge(doc)}
         </div>
 
@@ -492,6 +503,12 @@ export default function VerificationPanel({
                   </div>
                 ))}
               </div>
+
+              {doc.processingTime && (
+                <div className="mt-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded border border-indigo-200 bg-indigo-50 text-indigo-700">
+                  Processing Time: {doc.processingTime}
+                </div>
+              )}
             </div>
 
 
@@ -564,12 +581,7 @@ export default function VerificationPanel({
           { key: 'expiryDate', label: 'Expiry Date' },
           { key: 'manager', label: 'Manager / Owner' },
           { key: 'licensedActivities', label: 'Licensed Activities' }
-        ],
-        trade_license.extractedData?.expiryDate && isDocumentExpired(trade_license.extractedData.expiryDate) ? (
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border border-rose-200 bg-rose-50 text-rose-700">
-            Expired on {trade_license.extractedData.expiryDate}
-          </span>
-        ) : null
+        ]
       )}
       {activeTab === 'vat' && renderDocumentDetailsTab(
         vat_certificate,
@@ -585,7 +597,9 @@ export default function VerificationPanel({
         bank_document,
         'Official Bank Document',
         [
-          { key: 'companyName', label: 'Company Name from Bank Letter' },
+          { key: 'bankAccountNumber', label: 'Account Number/IBAN' },
+          { key: 'bankName', label: 'Financial Institution' },
+          { key: 'companyName', label: 'Beneficiary Name' },
           { key: 'status', label: 'Account Standing' }
         ]
       )}

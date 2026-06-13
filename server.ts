@@ -66,6 +66,52 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeCompanyName(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  let normalized = value.toUpperCase();
+  normalized = normalized.replace(/[\(\)\[\],.;\-_/]/g, " ");
+  normalized = normalized.replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/g, " ");
+  normalized = normalized.replace(/\bC\s*\.?\s*O\s*\.?\b/g, " ");
+  normalized = normalized.replace(/\bCO\b/g, " ");
+  normalized = normalized.replace(/\bLIMITED\b/g, " ");
+  normalized = normalized.replace(/\bLTD\b/g, " ");
+  normalized = normalized.replace(/\bCORP\b/g, " ");
+  normalized = normalized.replace(/\bINC\b/g, " ");
+  normalized = normalized.replace(/\s+/g, " ").trim();
+
+  const tokens = normalized.split(" ");
+  for (let size = Math.floor(tokens.length / 2); size >= 1; size -= 1) {
+    if (tokens.length % size !== 0) {
+      continue;
+    }
+
+    const reference = tokens.slice(0, size).join(" ");
+    let repeated = true;
+    for (let index = size; index < tokens.length; index += size) {
+      const candidate = tokens.slice(index, index + size).join(" ");
+      if (candidate !== reference) {
+        repeated = false;
+        break;
+      }
+    }
+
+    if (repeated) {
+      return reference;
+    }
+  }
+
+  return normalized;
+}
+
+function companyNamesMatch(left: string, right: string) {
+  const normalizedLeft = normalizeCompanyName(left);
+  const normalizedRight = normalizeCompanyName(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
 function parseDateValue(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -239,6 +285,7 @@ app.get("/api/government-records", (req, res) => {
 // REST API: Automated Document Extraction and Pre-validation
 app.post("/api/analyze-document", async (req, res) => {
   try {
+    const startedAt = performance.now();
     const { documentType, fileBase64, mimeType, isPresetSample, companyName } = req.body;
 
     if (!documentType) {
@@ -298,11 +345,15 @@ app.post("/api/analyze-document", async (req, res) => {
       });
     }
 
+    const processingTimeMs = Math.round(performance.now() - startedAt);
+
     return res.json({
       status: "success",
       ocrSource: validationConfig.ocrSource,
       validationStatus: parsedResponse.status || "unknown",
       score: parsedResponse.score ?? null,
+      processingTimeMs,
+      processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
       extractedData: normalizeValidationResponse(
         documentType as DocumentType,
         parsedResponse
@@ -321,13 +372,14 @@ app.post("/api/analyze-document", async (req, res) => {
 // REST API: Validates extracted document indices against document-only rules
 app.post("/api/verify-government", (req, res) => {
   try {
-    const { documentType, extractedFields } = req.body;
+    const { documentType, extractedFields, enteredCompanyName } = req.body;
 
     if (!documentType || !extractedFields) {
       return res.status(400).json({ error: "Missing documentType or extractedFields arguments." });
     }
 
     console.log(`Executing document-only verification on: ${documentType}`);
+    const normalizedEnteredCompanyName = normalizeCompanyName((enteredCompanyName || "").trim());
 
     if (documentType === "trade_license") {
       const licenseNumber = (extractedFields.licenseNumber || "").trim();
@@ -338,7 +390,13 @@ app.post("/api/verify-government", (req, res) => {
         ""
       ).trim();
       const companyName = (extractedFields.companyName || "Verified Trade License").trim();
-      const isActive = licenseNumber && expiryDate && licensedActivities && isNotExpired(expiryDate);
+      const companyNameMatches = companyNamesMatch(normalizedEnteredCompanyName, companyName);
+      const isActive =
+        companyNameMatches &&
+        licenseNumber &&
+        expiryDate &&
+        licensedActivities &&
+        isNotExpired(expiryDate);
 
       if (isActive) {
         return res.json({
@@ -363,17 +421,22 @@ app.post("/api/verify-government", (req, res) => {
         status: "success",
         matched: false,
         registryStatus: "NOT_FOUND",
-        details: !licenseNumber || !expiryDate || !licensedActivities
-          ? "Trade license is missing required OCR fields. Please review license number, expiry date, and licensed activities."
-          : `Trade license expired on ${expiryDate}. Please upload a valid license with a future expiry date.`,
+        details: !normalizedEnteredCompanyName
+          ? "Entered company name is missing. Please provide the company name from the chat."
+          : !companyNameMatches
+            ? `Company name mismatch after normalization. Entered: "${enteredCompanyName}". OCR: "${companyName}".`
+            : !licenseNumber || !expiryDate || !licensedActivities
+              ? "Trade license is missing required OCR fields. Please review license number, expiry date, and licensed activities."
+              : `Trade license expired on ${expiryDate}. Please upload a valid license with a future expiry date.`,
       });
     }
 
     if (documentType === "vat_certificate") {
       const vatNumber = (extractedFields.vatNumber || "").trim();
       const companyName = (extractedFields.companyName || "").trim();
+      const companyNameMatches = companyNamesMatch(normalizedEnteredCompanyName, companyName);
 
-      if (vatNumber && companyName) {
+      if (vatNumber && companyName && companyNameMatches) {
         return res.json({
           status: "success",
           matched: true,
@@ -393,14 +456,19 @@ app.post("/api/verify-government", (req, res) => {
         status: "success",
         matched: false,
         registryStatus: "NOT_FOUND",
-        details: "VAT certificate is missing the VAT number or company name OCR field.",
+        details: !normalizedEnteredCompanyName
+          ? "Entered company name is missing. Please provide the company name from the chat."
+          : !companyNameMatches
+            ? `Company name mismatch after normalization. Entered: "${enteredCompanyName}". OCR: "${companyName}".`
+            : "VAT certificate is missing the VAT number or company name OCR field.",
       });
     }
 
     if (documentType === "bank_document") {
       const companyName = (extractedFields.companyName || "").trim();
+      const companyNameMatches = companyNamesMatch(normalizedEnteredCompanyName, companyName);
 
-      if (companyName) {
+      if (companyName && companyNameMatches) {
         return res.json({
           status: "success",
           matched: true,
@@ -420,7 +488,11 @@ app.post("/api/verify-government", (req, res) => {
         status: "success",
         matched: false,
         registryStatus: "NOT_FOUND",
-        details: "Bank document is missing the company name OCR field.",
+        details: !normalizedEnteredCompanyName
+          ? "Entered company name is missing. Please provide the company name from the chat."
+          : !companyNameMatches
+            ? `Company name mismatch after normalization. Entered: "${enteredCompanyName}". OCR: "${companyName}".`
+            : "Bank document is missing the company name OCR field.",
       });
     }
 
