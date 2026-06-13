@@ -21,6 +21,7 @@ function toFileBuffer(fileBase64: string) {
 
 export async function onRequestPost({ request }: { request: Request }) {
   try {
+    const startedAt = performance.now();
     const { documentType, fileBase64, mimeType } = (await request.json()) as {
       documentType?: string;
       fileBase64?: string;
@@ -82,11 +83,15 @@ export async function onRequestPost({ request }: { request: Request }) {
       );
     }
 
+    const processingTimeMs = Math.round(performance.now() - startedAt);
+
     return Response.json({
       status: "success",
       ocrSource: validationConfig.ocrSource,
       validationStatus: parsedResponse.status || "unknown",
       score: parsedResponse.score ?? null,
+      processingTimeMs,
+      processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
       extractedData: normalizeValidationResponse(
         documentType as DocumentType,
         parsedResponse
