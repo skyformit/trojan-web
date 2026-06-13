@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, FileText, CheckCircle2, ShieldAlert, RefreshCw, Bot, HelpCircle, Sparkles, ArrowRight, Mail, Phone, UserCheck } from 'lucide-react';
+import { Send, Upload, FileText, CheckCircle2, ShieldAlert, RefreshCw, Bot, HelpCircle, Sparkles, ArrowRight, Mail, Phone, UserCheck, AlertCircle } from 'lucide-react';
 import { ChatMessage, SupplierRegistrationState, DocumentVerification } from '../types';
 import { streamChatMessage } from '../utils/chatStream';
 
@@ -9,6 +9,38 @@ interface AIAgentChatProps {
   onAnalyzeDocument: (type: 'trade_license' | 'vat_certificate' | 'bank_document', fileBase64: string | null, mimeType: string, isPresetSample?: { companyName: string }) => Promise<void>;
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+}
+
+type ContactValidationErrors = {
+  name?: string;
+  email?: string;
+  phone?: string;
+};
+
+function validateContactInfo(name: string, email: string, phone: string): ContactValidationErrors {
+  const errors: ContactValidationErrors = {};
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPhone = phone.trim();
+  const phoneDigits = trimmedPhone.replace(/\D/g, '');
+
+  if (!trimmedName) {
+    errors.name = 'Full name is required.';
+  }
+
+  if (!trimmedEmail) {
+    errors.email = 'Email address is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    errors.email = 'Enter a valid email address.';
+  }
+
+  if (!trimmedPhone) {
+    errors.phone = 'UAE mobile number is required.';
+  } else if (!(phoneDigits.length === 9 || (phoneDigits.length === 12 && phoneDigits.startsWith('971')))) {
+    errors.phone = 'Enter a valid UAE mobile number with 9 digits, or +971 followed by 9 digits.';
+  }
+
+  return errors;
 }
 
 export default function AIAgentChat({
@@ -21,6 +53,8 @@ export default function AIAgentChat({
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [activeUploadType, setActiveUploadType] = useState<'trade_license' | 'vat_certificate' | 'bank_document' | null>('trade_license');
+  const [contactValidationAttempted, setContactValidationAttempted] = useState(false);
+  const [contactErrors, setContactErrors] = useState<ContactValidationErrors>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +91,25 @@ export default function AIAgentChat({
     }
   }, []);
 
+  useEffect(() => {
+    if (!contactValidationAttempted) {
+      return;
+    }
+
+    setContactErrors(
+      validateContactInfo(
+        registrationState.contactName,
+        registrationState.contactEmail,
+        registrationState.phoneNumber
+      )
+    );
+  }, [
+    contactValidationAttempted,
+    registrationState.contactName,
+    registrationState.contactEmail,
+    registrationState.phoneNumber
+  ]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
@@ -82,10 +135,24 @@ export default function AIAgentChat({
     }, 800);
   };
 
-  const handleSaveContactInfo = (name?: string, email?: string, phone?: string) => {
-    const cName = name || registrationState.contactName || 'N/A';
-    const cEmail = email || registrationState.contactEmail || 'N/A';
-    const cPhone = phone || registrationState.phoneNumber || 'N/A';
+  const handleSaveContactInfo = () => {
+    setContactValidationAttempted(true);
+
+    const validationErrors = validateContactInfo(
+      registrationState.contactName,
+      registrationState.contactEmail,
+      registrationState.phoneNumber
+    );
+
+    setContactErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    const cName = registrationState.contactName.trim();
+    const cEmail = registrationState.contactEmail.trim();
+    const cPhone = registrationState.phoneNumber.trim();
 
     setChatHistory(prev => [
       ...prev,
@@ -105,6 +172,9 @@ export default function AIAgentChat({
         phoneNumber: cPhone,
         currentStep: 'trade_license_upload'
       }));
+
+      setContactValidationAttempted(false);
+      setContactErrors({});
 
       await streamChatMessage(
         setChatHistory,
@@ -411,6 +481,13 @@ export default function AIAgentChat({
               <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
               <span>Notification Contact Setup</span>
             </div>
+
+            {contactValidationAttempted && Object.keys(contactErrors).length > 0 && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700 flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>Please fix the highlighted fields before continuing.</span>
+              </div>
+            )}
             
             <div className="space-y-3.5 text-xs">
               <div>
@@ -423,8 +500,18 @@ export default function AIAgentChat({
                   placeholder="e.g. John Doe"
                   value={registrationState.contactName || ''}
                   onChange={(e) => setRegistrationState(prev => ({ ...prev, contactName: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium"
+                  className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
+                    contactValidationAttempted && contactErrors.name
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
                 />
+                {contactValidationAttempted && contactErrors.name && (
+                  <p className="mt-1 text-[10px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{contactErrors.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -437,29 +524,48 @@ export default function AIAgentChat({
                   placeholder="john.doe@company.com"
                   value={registrationState.contactEmail || ''}
                   onChange={(e) => setRegistrationState(prev => ({ ...prev, contactEmail: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium"
+                  className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
+                    contactValidationAttempted && contactErrors.email
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
                 />
+                {contactValidationAttempted && contactErrors.email && (
+                  <p className="mt-1 text-[10px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{contactErrors.email}</span>
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  <span>Mobile Phone Number</span>
+                  <span>UAE Mobile Phone Number</span>
                 </label>
                 <input
                   type="tel"
-                  placeholder="+1 (555) 0122"
+                  placeholder="+9715XXXXXXXX"
                   value={registrationState.phoneNumber || ''}
                   onChange={(e) => setRegistrationState(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium"
+                  className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
+                    contactValidationAttempted && contactErrors.phone
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
                 />
+                {contactValidationAttempted && contactErrors.phone && (
+                  <p className="mt-1 text-[10px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{contactErrors.phone}</span>
+                  </p>
+                )}
               </div>
             </div>
 
             <button
               onClick={() => handleSaveContactInfo()}
-              disabled={!registrationState.contactName?.trim() || !registrationState.contactEmail?.trim() || !registrationState.phoneNumber?.trim()}
-              className="w-full text-[10px] uppercase tracking-widest bg-indigo-600 hover:bg-slate-900 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-sm transition flex items-center justify-center gap-2 mt-2 shadow-xs"
+              className="w-full text-[10px] uppercase tracking-widest bg-indigo-600 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-sm transition flex items-center justify-center gap-2 mt-2 shadow-xs"
             >
               <span>Save Contact Config & Proceed</span>
               <ArrowRight className="w-3.5 h-3.5" />
