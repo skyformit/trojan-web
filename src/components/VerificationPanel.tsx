@@ -62,6 +62,32 @@ export default function VerificationPanel({
     return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
   };
 
+  const getDocumentSummaryValue = (doc: DocumentVerification) => {
+    if (doc.type === 'bank_document') {
+      return (
+        doc.extractedData?.companyName ||
+        doc.extractedData?.bankName ||
+        doc.extractedData?.bankAccountNumber ||
+        'N/A'
+      );
+    }
+
+    if (doc.type === 'vat_certificate') {
+      return (
+        doc.extractedData?.taxRegistrationNumber ||
+        doc.extractedData?.vatNumber ||
+        doc.extractedData?.companyName ||
+        'N/A'
+      );
+    }
+
+    return (
+      doc.extractedData?.licenseNumber ||
+      doc.extractedData?.companyName ||
+      'N/A'
+    );
+  };
+
   // Perform cross-document validation to make sure naming is fully aligned
   const getDocumentDiscrepancyCheck = () => {
     const findings: string[] = [];
@@ -195,7 +221,13 @@ export default function VerificationPanel({
                   <div>
                     <p className="text-xs font-bold text-slate-900">{label}</p>
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {doc.extractedData ? `No: ${Object.values(doc.extractedData)[0] || 'Unknown'}` : 'Not provided yet'}
+                      {doc.extractedData
+                        ? doc.type === 'bank_document'
+                          ? `Bank Holder Name: ${getDocumentSummaryValue(doc)}`
+                          : doc.type === 'vat_certificate'
+                            ? `VAT Registration No: ${getDocumentSummaryValue(doc)}`
+                            : `Trade License No: ${getDocumentSummaryValue(doc)}`
+                        : 'Not provided yet'}
                     </p>
                     {doc.processingTime && (
                       <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider mt-0.5">
