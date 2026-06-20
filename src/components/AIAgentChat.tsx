@@ -9,7 +9,6 @@ interface AIAgentChatProps {
   onAnalyzeDocument: (type: 'trade_license' | 'vat_certificate' | 'bank_document', fileBase64: string | null, mimeType: string, isPresetSample?: { companyName: string }) => Promise<void>;
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
-  showRoutingDebug?: boolean;
 }
 
 const ENABLE_LOCAL_ROUTING_HEURISTICS =
@@ -425,7 +424,6 @@ export default function AIAgentChat({
   onAnalyzeDocument,
   chatHistory,
   setChatHistory,
-  showRoutingDebug = false
 }: AIAgentChatProps) {
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -435,13 +433,6 @@ export default function AIAgentChat({
   const [contactErrors, setContactErrors] = useState<ContactValidationErrors>({});
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
-  const [routingDebugInfo, setRoutingDebugInfo] = useState<{
-    intent?: 'vendor_lookup' | 'general_chat';
-    extractedSubject?: string;
-    finalRoute?: 'general' | 'vendor' | 'renewal';
-    source?: string;
-    rule?: string;
-  }>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -512,14 +503,6 @@ export default function AIAgentChat({
       ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
         ? classifyInitialInput(text)
         : { intent: 'general_chat' as const, extracted: '', rule: 'llm_only' };
-
-    setRoutingDebugInfo({
-      intent: initialInputClassification.intent,
-      extractedSubject: initialInputClassification.extracted,
-      finalRoute: undefined,
-      source: undefined,
-      rule: initialInputClassification.rule
-    });
 
     if (!textToSend) {
       setInputText('');
@@ -619,12 +602,6 @@ export default function AIAgentChat({
             ? 'Vendor approval'
             : 'Renewal approval';
 
-      setRoutingDebugInfo(prev => ({
-        ...prev,
-        finalRoute: finalWorkflowRoute,
-        source: getStructuredSource(data)
-      }));
-
       setRegistrationState(prev => ({
         ...prev,
         companyName: prev.companyName || vendorName || userText,
@@ -678,17 +655,17 @@ export default function AIAgentChat({
         setConversationId(data.conversation_id);
       }
 
-      await streamChatMessage(
-        setChatHistory,
-        tbmsVendor
-          ? `Vendor found: ${tbmsVendor.vendName}\nLicense: ${tbmsVendor.tradeLicenseNo || 'N/A'}\nStatus: ${tbmsVendor.approvalStatus || 'N/A'}\nExpiry: ${tbmsVendor.expDate || 'N/A'}\n\nRoute: ${routeSummary}`
-          : forceVendorLookup || getStructuredSource(data) === 'tbms'
-            ? `No vendor match found. Please enter the contact details below to continue.\n\nRoute: Vendor approval`
-          : `${responseText}\n\nRoute: ${routeSummary}`,
-        {
-          onFirstChunk: () => setIsRequestInProgress(false)
-        }
-      );
+      if (!tbmsVendor) {
+        await streamChatMessage(
+          setChatHistory,
+          forceVendorLookup || getStructuredSource(data) === 'tbms'
+            ? `No vendor match found. Please enter the contact details below to continue.`
+            : responseText,
+          {
+            onFirstChunk: () => setIsRequestInProgress(false)
+          }
+        );
+      }
 
       if (showContactForm || shouldOpenContactSetup) {
         setRegistrationState(prev => ({
@@ -885,25 +862,6 @@ export default function AIAgentChat({
 
   const isAgentStreaming = chatHistory.some(message => message.sender === 'agent' && message.isPending);
   const showContactSetup = registrationState.currentStep === 'contact_info' && registrationState.workflowRoute !== 'general';
-  const getRuleBadgeClasses = (rule?: string) => {
-    switch (rule) {
-      case 'explicit_lookup_phrase':
-      case 'keyword_lookup':
-      case 'standalone_name_like':
-        return 'text-emerald-700 bg-emerald-100 border-emerald-200';
-      case 'question':
-        return 'text-amber-700 bg-amber-100 border-amber-200';
-      case 'greeting':
-      case 'empty_input':
-        return 'text-slate-600 bg-slate-100 border-slate-200';
-      case 'not_name_like':
-      case 'non_initial_step':
-        return 'text-sky-700 bg-sky-100 border-sky-200';
-      default:
-        return 'text-violet-700 bg-violet-100 border-violet-200';
-    }
-  };
-
   return (
     <div className="flex flex-col h-[600px] border border-slate-200 bg-white rounded-lg overflow-hidden shadow-sm">
       {/* Bot Chat Header with security seal */}
@@ -1153,27 +1111,6 @@ export default function AIAgentChat({
               <span>Save Contact Config & Proceed</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          </div>
-        )}
-
-        {showRoutingDebug && (
-          <div className="max-w-[90%] mx-auto rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-500 font-mono">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-bold uppercase tracking-widest text-slate-600">Routing Debug</span>
-              <span className="text-slate-400">Config: ON</span>
-            </div>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>Intent: {routingDebugInfo.intent || 'n/a'}</div>
-              <div>Extracted: {routingDebugInfo.extractedSubject || 'n/a'}</div>
-              <div>Source: {routingDebugInfo.source || 'n/a'}</div>
-              <div>Final Route: {routingDebugInfo.finalRoute || 'n/a'}</div>
-              <div className="sm:col-span-2 flex items-center gap-2">
-                <span>Rule:</span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${getRuleBadgeClasses(routingDebugInfo.rule)}`}>
-                  {routingDebugInfo.rule || 'n/a'}
-                </span>
-              </div>
-            </div>
           </div>
         )}
 

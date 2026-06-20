@@ -634,7 +634,7 @@ export default function VerificationPanel({
               <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">GPT Review</p>
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Expert Review</p>
                     <h5 className="text-sm font-bold text-slate-900 mt-0.5">Document Sentiment & Review</h5>
                   </div>
                   <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${sentiment.classes}`}>
