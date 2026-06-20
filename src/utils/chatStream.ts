@@ -7,6 +7,7 @@ type StreamOptions = {
   sender?: ChatMessage['sender'];
   chunkDelayMs?: number;
   timestamp?: string;
+  onFirstChunk?: () => void;
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -21,6 +22,7 @@ export async function streamChatMessage(
   const timestamp = options.timestamp ?? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const messageId = `${sender}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const chunks = text.match(/\S+\s*/g) ?? [text];
+  let notifiedFirstChunk = false;
 
   setChatHistory(prev => [
     ...prev,
@@ -42,6 +44,11 @@ export async function streamChatMessage(
           : message
       )
     );
+
+    if (!notifiedFirstChunk) {
+      notifiedFirstChunk = true;
+      options.onFirstChunk?.();
+    }
 
     const trimmedChunk = chunk.trimEnd();
     if (/[.!?]$/.test(trimmedChunk)) {

@@ -62,6 +62,45 @@ export default function VerificationPanel({
     return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
   };
 
+  const parseTradeLicenseDate = (value?: string) => {
+    if (!value) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+    if (isoMatch) {
+      return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00Z`);
+    }
+
+    const dayFirstMatch = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (dayFirstMatch) {
+      const day = Number(dayFirstMatch[1]);
+      const month = Number(dayFirstMatch[2]);
+      const year = Number(dayFirstMatch[3]);
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    const textualMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+    if (textualMatch) {
+      const parsed = new Date(`${textualMatch[1]} ${textualMatch[2]} ${textualMatch[3]}`);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+
+    return null;
+  };
+
   const getDocumentSummaryValue = (doc: DocumentVerification) => {
     if (doc.type === 'bank_document') {
       return (
@@ -88,6 +127,52 @@ export default function VerificationPanel({
     );
   };
 
+  const getGptReviewSentiment = (doc: DocumentVerification) => {
+    const review = doc.gptReview;
+    if (!review) {
+      return {
+        label: 'Not available',
+        subtitle: 'No GPT review data',
+        classes: 'text-slate-600 bg-slate-100 border-slate-200',
+        subtitleClass: 'text-slate-500'
+      };
+    }
+
+    if (review.isConsistent && review.plausibility_score >= 0.85) {
+      return {
+        label: 'Likely valid',
+        subtitle: 'High confidence OCR',
+        classes: 'text-emerald-700 bg-emerald-100 border-emerald-200',
+        subtitleClass: 'text-emerald-700'
+      };
+    }
+
+    if (!review.isConsistent && review.plausibility_score < 0.35) {
+      return {
+        label: 'Tampering suspected',
+        subtitle: 'Conflicting / low-trust data',
+        classes: 'text-rose-700 bg-rose-100 border-rose-200',
+        subtitleClass: 'text-rose-700'
+      };
+    }
+
+    if (!review.isConsistent || review.plausibility_score < 0.7) {
+      return {
+        label: 'Needs review',
+        subtitle: 'Manual verification recommended',
+        classes: 'text-amber-700 bg-amber-100 border-amber-200',
+        subtitleClass: 'text-amber-700'
+      };
+    }
+
+    return {
+      label: 'High risk',
+      subtitle: 'Potential extraction errors',
+      classes: 'text-orange-700 bg-orange-100 border-orange-200',
+      subtitleClass: 'text-orange-700'
+    };
+  };
+
   // Perform cross-document validation to make sure naming is fully aligned
   const getDocumentDiscrepancyCheck = () => {
     const findings: string[] = [];
@@ -106,7 +191,8 @@ export default function VerificationPanel({
 
     // Expiry check
     if (trade_license.extractedData?.expiryDate) {
-      const isExpired = new Date(trade_license.extractedData.expiryDate) < new Date();
+      const expiryDate = parseTradeLicenseDate(trade_license.extractedData.expiryDate);
+      const isExpired = Boolean(expiryDate && expiryDate.getTime() < Date.now());
       if (isExpired) {
         findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
       }
@@ -507,6 +593,7 @@ export default function VerificationPanel({
     title: string,
     fieldsDef: Array<{ key: string; label: string }>
   ) => {
+    const sentiment = getGptReviewSentiment(doc);
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -542,6 +629,50 @@ export default function VerificationPanel({
                 </div>
               )}
             </div>
+
+            {doc.gptReview && (
+              <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">GPT Review</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Document Sentiment & Review</h5>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${sentiment.classes}`}>
+                    {sentiment.label}
+                  </span>
+                </div>
+                <p className={`text-[10px] font-medium -mt-1 ${sentiment.subtitleClass}`}>{sentiment.subtitle}</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Plausibility Score</span>
+                    <span className="font-bold text-slate-800">{doc.gptReview.plausibility_score}</span>
+                  </div>
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Consistency</span>
+                    <span className={`font-bold ${doc.gptReview.isConsistent ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {doc.gptReview.isConsistent ? 'Consistent' : 'Inconsistent'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Reasoning</span>
+                  <p className="text-xs text-slate-700 leading-relaxed">{doc.gptReview.reasoning}</p>
+                </div>
+
+                {doc.gptReview.anomalies.length > 0 && (
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Anomalies</span>
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700 leading-relaxed">
+                      {doc.gptReview.anomalies.map((anomaly, idx) => (
+                        <li key={idx}>{anomaly}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
 
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, FileText, CheckCircle2, ShieldAlert, RefreshCw, Bot, HelpCircle, Sparkles, ArrowRight, Mail, Phone, UserCheck, AlertCircle } from 'lucide-react';
+import { Send, Upload, FileText, CheckCircle2, ShieldAlert, RefreshCw, Bot, Sparkles, ArrowRight, Mail, Phone, UserCheck, AlertCircle } from 'lucide-react';
 import { ChatMessage, SupplierRegistrationState, DocumentVerification } from '../types';
 import { streamChatMessage } from '../utils/chatStream';
 
@@ -9,13 +9,386 @@ interface AIAgentChatProps {
   onAnalyzeDocument: (type: 'trade_license' | 'vat_certificate' | 'bank_document', fileBase64: string | null, mimeType: string, isPresetSample?: { companyName: string }) => Promise<void>;
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  showRoutingDebug?: boolean;
 }
+
+type GeneralBotResponse = {
+  ok?: boolean;
+  status?: 'completed' | 'expired' | 'renewal_due' | string;
+  text?: string;
+  source?: string;
+  origin?: string;
+  source_type?: string;
+  response_type?: string;
+  conversation_id?: string;
+  routing?: {
+    expiry_date?: string;
+    days_remaining?: number;
+    status?: 'expired' | 'renewal_due' | 'completed' | string;
+    workflow_name?: string;
+  };
+  workflow_started?: boolean;
+  agent?: {
+    name?: string;
+    version?: string;
+  };
+  warning?: {
+    code?: string;
+    message?: string;
+  };
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
+type WorkflowRoute = 'general' | 'vendor' | 'renewal';
 
 type ContactValidationErrors = {
   name?: string;
   email?: string;
   phone?: string;
 };
+
+type VendorLookupSummary = {
+  companyName: string;
+  tradeLicenseNo: string;
+  approvalStatus: string;
+  lifecycleStatus: 'expired' | 'renewal_due' | 'completed';
+  routeLabel: string;
+  expDate: string;
+  issueAuthority: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+  chamberNo: string;
+  businessActivity: string;
+};
+
+function parseExpiryDateFromText(text: string) {
+  const patterns = [
+    /(?:Trade License Expiry(?: \(last on record\))?:?\s*)(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i,
+    /(?:expires on|expired on)\s+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i,
+    /(\d{4}-\d{2}-\d{2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const parsed = new Date(match[1]);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseVendorExpiryDate(value: string) {
+  const patterns = [
+    /(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/,
+    /(\d{4}-\d{2}-\d{2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (!match?.[1]) {
+      continue;
+    }
+
+    const parsed = new Date(match[1]);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function getDaysRemainingFromExpiry(expDate: string) {
+  const parsedExpiry = parseVendorExpiryDate(expDate);
+  if (!parsedExpiry) {
+    return null;
+  }
+
+  return Math.floor((parsedExpiry.getTime() - Date.now()) / 86400000);
+}
+
+function getVendorLifecycleStatus(expDate: string, approvalStatus?: string) {
+  const parsedExpiry = parseVendorExpiryDate(expDate);
+  const daysRemaining = getDaysRemainingFromExpiry(expDate);
+  const normalizedApprovalStatus = (approvalStatus || '').toLowerCase();
+
+  if (parsedExpiry && parsedExpiry.getTime() < Date.now()) {
+    return 'expired' as const;
+  }
+
+  if (daysRemaining !== null && daysRemaining <= 60) {
+    return 'renewal_due' as const;
+  }
+
+  if (normalizedApprovalStatus.includes('renewal')) {
+    return 'renewal_due' as const;
+  }
+
+  return 'completed' as const;
+}
+
+function getVendorRouteLabel(lifecycleStatus: VendorLookupSummary['lifecycleStatus']) {
+  if (lifecycleStatus === 'expired') {
+    return 'TCG-Vendor-Approval-Workflow';
+  }
+
+  if (lifecycleStatus === 'renewal_due') {
+    return 'Renewal-Vendor-Approval-Workflow';
+  }
+
+  return 'Vendor approval flow';
+}
+
+function getVendorBadgeLabel(summary: VendorLookupSummary) {
+  if (summary.lifecycleStatus === 'expired') {
+    return 'Expired';
+  }
+
+  if (summary.lifecycleStatus === 'renewal_due') {
+    return 'Renewal due';
+  }
+
+  return summary.approvalStatus || 'Approved';
+}
+
+function inferWorkflowStatusFromText(text: string) {
+  const normalized = text.toLowerCase();
+  const expiryDate = parseExpiryDateFromText(text);
+
+  if (
+    normalized.includes('expired') ||
+    normalized.includes('please verify renewal status') ||
+    (expiryDate && expiryDate.getTime() < Date.now())
+  ) {
+    return 'expired' as const;
+  }
+
+  if (normalized.includes('renewal_due')) {
+    return 'renewal_due' as const;
+  }
+
+  if (normalized.includes('renewal')) {
+    return 'renewal_due' as const;
+  }
+
+  return 'completed' as const;
+}
+
+function getWorkflowStateFromResponse(response: GeneralBotResponse) {
+  const sourceType = getStructuredSource(response);
+  const responseType = getStructuredResponseType(response);
+
+  if (sourceType === 'tbms') {
+    return {
+      workflowRoute: 'vendor' as WorkflowRoute,
+      workflowStatus: 'completed' as const,
+      workflowName: response.routing?.workflow_name || 'TBMS Vendor Lookup',
+      workflowApiPath: '/api/tbms-vendor-lookup',
+    };
+  }
+
+  if (sourceType === 'workflow') {
+    const isRenewal = responseType.includes('renewal');
+    return {
+      workflowRoute: isRenewal ? 'renewal' as WorkflowRoute : 'vendor' as WorkflowRoute,
+      workflowStatus: isRenewal ? 'renewal_due' as const : 'completed' as const,
+      workflowName: response.routing?.workflow_name || (isRenewal ? 'Renewal-Vendor-Approval-Workflow' : 'TCG-Vendor-Approval-Workflow'),
+      workflowApiPath: isRenewal ? '/api/renewal-vendor-approval-workflow' : '/api/vendor-approval-workflow',
+    };
+  }
+
+  if (sourceType === 'backend') {
+    return {
+      workflowRoute: 'general' as WorkflowRoute,
+      workflowStatus: 'completed' as const,
+      workflowName: response.agent?.name || 'GENERAL_CHAT_AGENT_ID',
+      workflowApiPath: '/api/invoke-general-bot',
+    };
+  }
+
+  if (sourceType === 'llm' || sourceType === 'document_intelligence' || sourceType === 'storage') {
+    return {
+      workflowRoute: 'general' as WorkflowRoute,
+      workflowStatus: 'completed' as const,
+      workflowName: response.agent?.name || response.source_type || 'GENERAL_CHAT_AGENT_ID',
+      workflowApiPath: '/api/invoke-general-bot',
+    };
+  }
+
+  const inferredStatus = inferWorkflowStatusFromText(response.text || '');
+  const explicitStatus = response.status || response.routing?.status;
+  const status = inferredStatus !== 'completed' ? inferredStatus : (explicitStatus || inferredStatus);
+  if (status === 'expired') {
+    return {
+      workflowRoute: 'vendor' as WorkflowRoute,
+      workflowStatus: 'expired' as const,
+      workflowName: response.routing?.workflow_name || 'TCG-Vendor-Approval-Workflow',
+      workflowApiPath: '/api/vendor-approval-workflow',
+    };
+  }
+
+  if (status === 'renewal_due') {
+    return {
+      workflowRoute: 'renewal' as WorkflowRoute,
+      workflowStatus: 'renewal_due' as const,
+      workflowName: response.routing?.workflow_name || 'Renewal-Vendor-Approval-Workflow',
+      workflowApiPath: '/api/renewal-vendor-approval-workflow',
+    };
+  }
+
+  return {
+    workflowRoute: 'general' as WorkflowRoute,
+    workflowStatus: 'completed' as const,
+    workflowName: response.agent?.name || 'GENERAL_CHAT_AGENT_ID',
+    workflowApiPath: '/api/invoke-general-bot',
+  };
+}
+
+function extractVendorName(text: string) {
+  const match = text.match(/Vendor Name:\s*(.+)/i);
+  return match?.[1]?.trim() || '';
+}
+
+function getFirstTbmsVendor(response: GeneralBotResponse) {
+  const vendors = (response as any)?.data?.data?.vendors;
+  return Array.isArray(vendors) && vendors.length > 0 ? vendors[0] : null;
+}
+
+function hasTbmsVendorResults(response: GeneralBotResponse) {
+  return Boolean(getFirstTbmsVendor(response));
+}
+
+function getVendorDisplayName(response: GeneralBotResponse) {
+  const tbmsVendor = getFirstTbmsVendor(response);
+  if (tbmsVendor?.vendName) {
+    return String(tbmsVendor.vendName).trim();
+  }
+
+  return extractVendorName(response.text || '');
+}
+
+function getStructuredSource(response: GeneralBotResponse) {
+  return (response.source_type || response.source || '').toLowerCase();
+}
+
+function getStructuredResponseType(response: GeneralBotResponse) {
+  return (response.response_type || '').toLowerCase();
+}
+
+function classifyInitialInput(value: string) {
+  const normalized = value.trim();
+  const lower = normalized.toLowerCase();
+  const singleTokenStopwords = new Set([
+    'name',
+    'company',
+    'vendor',
+    'trade',
+    'license',
+    'licence',
+    'number',
+    'no',
+    'id',
+    'email',
+    'mail',
+    'phone',
+    'mobile',
+  ]);
+
+  if (!normalized) {
+    return { intent: 'general_chat' as const, extracted: '', rule: 'empty_input' };
+  }
+
+  if (/^(hi|hello|hey|thanks|thank you|good morning|good evening|good afternoon)\b/.test(lower)) {
+    return { intent: 'general_chat' as const, extracted: '', rule: 'greeting' };
+  }
+
+  const explicitPatterns = [
+    /\b(my|our)\s+company\s+name\s+is\s+(.+)$/i,
+    /\b(company\s+name|company|vendor\s+name|vendor)\s*[:\-]?\s*(.+)$/i,
+    /\b(trade\s+license\s+number|trade\s+license\s+no|license\s+number|license\s+no|licence\s+number|licence\s+no)\s*[:\-]?\s*(.+)$/i,
+  ];
+
+  for (const pattern of explicitPatterns) {
+    const match = normalized.match(pattern);
+    if (match?.[2]) {
+      return {
+        intent: /trade\s+license|license|licence/i.test(match[1]) ? 'vendor_lookup' as const : 'vendor_lookup' as const,
+        extracted: match[2].trim(),
+        rule: 'explicit_lookup_phrase',
+      };
+    }
+  }
+
+  if (
+    /\b(company name|my company|our company|vendor name|vendor|trade license|license number|license no|licence number|licence no)\b/i.test(normalized)
+  ) {
+    return { intent: 'vendor_lookup' as const, extracted: normalized, rule: 'keyword_lookup' };
+  }
+
+  const words = normalized.split(/\s+/);
+  const looksLikeQuestion = /[?]/.test(normalized) || /^(what|how|why|when|where|who|can you|could you|please)\b/i.test(lower);
+  const mostlyAlpha = /^[A-Za-z0-9&().,\-\/\s]+$/.test(normalized);
+  const isLikelyGreeting = /(hi|hello|hey|thanks|thank you)/i.test(lower);
+
+  if (looksLikeQuestion || isLikelyGreeting) {
+    return { intent: 'general_chat' as const, extracted: '', rule: looksLikeQuestion ? 'question' : 'greeting' };
+  }
+
+  const standaloneNameLike =
+    mostlyAlpha &&
+    words.length <= 6 &&
+    /[A-Za-z]/.test(normalized) &&
+    !/[,:;?]/.test(normalized) &&
+    !(words.length === 1 && singleTokenStopwords.has(lower));
+
+  return {
+    intent: standaloneNameLike ? 'vendor_lookup' as const : 'general_chat' as const,
+    extracted: normalized,
+    rule: standaloneNameLike ? 'standalone_name_like' : 'not_name_like',
+  };
+}
+
+function shouldShowContactForm(response: GeneralBotResponse) {
+  const sourceType = getStructuredSource(response);
+  const responseType = getStructuredResponseType(response);
+
+  if (response.ok === false) {
+    return false;
+  }
+
+  if (sourceType === 'tbms' || sourceType === 'workflow') {
+    return true;
+  }
+
+  if (
+    responseType.includes('vendor_lookup') ||
+    responseType.includes('trade_license') ||
+    responseType.includes('workflow_routed') ||
+    responseType.includes('vendor')
+  ) {
+    return true;
+  }
+
+  const normalized = (response.text || '').toLowerCase();
+  return (
+    normalized.includes('vendor name:') ||
+    normalized.includes('trade license no.:') ||
+    normalized.includes('trade license no:') ||
+    normalized.includes('license expiry date:') ||
+    normalized.includes('approved vendor') ||
+    normalized.includes('route: vendor approval') ||
+    normalized.includes('route: renewal approval')
+  );
+}
 
 function validateContactInfo(name: string, email: string, phone: string): ContactValidationErrors {
   const errors: ContactValidationErrors = {};
@@ -48,19 +421,37 @@ export default function AIAgentChat({
   setRegistrationState,
   onAnalyzeDocument,
   chatHistory,
-  setChatHistory
+  setChatHistory,
+  showRoutingDebug = false
 }: AIAgentChatProps) {
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isRequestInProgress, setIsRequestInProgress] = useState(false);
   const [activeUploadType, setActiveUploadType] = useState<'trade_license' | 'vat_certificate' | 'bank_document' | null>('trade_license');
   const [contactValidationAttempted, setContactValidationAttempted] = useState(false);
   const [contactErrors, setContactErrors] = useState<ContactValidationErrors>({});
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
+  const [routingDebugInfo, setRoutingDebugInfo] = useState<{
+    intent?: 'vendor_lookup' | 'general_chat';
+    extractedSubject?: string;
+    finalRoute?: 'general' | 'vendor' | 'renewal';
+    source?: string;
+    rule?: string;
+  }>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory]);
+  }, [chatHistory, isRequestInProgress, vendorLookupSummary, registrationState.currentStep, registrationState.workflowRoute]);
+
+  useEffect(() => {
+    if (chatHistory.length === 0) {
+      setConversationId(null);
+      setVendorLookupSummary(null);
+    }
+  }, [chatHistory.length]);
 
   // Adjust active expectations based on registration sequence step
   useEffect(() => {
@@ -84,7 +475,7 @@ export default function AIAgentChat({
         {
           id: 'welcome',
           sender: 'agent',
-          text: `Hello and welcome to the Secure Supplier Portal! 🛡️\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! **What is the registered Commercial Name of your Enterprise?** `,
+          text: `Hello and welcome to the Secure Supplier Portal! 🛡️\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! **What is the registered Commercial Name of your Enterprise?**`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -114,6 +505,20 @@ export default function AIAgentChat({
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
+    const initialInputClassification =
+      registrationState.currentStep === 'initial'
+        ? classifyInitialInput(text)
+        : { intent: 'general_chat' as const, extracted: '', rule: 'non_initial_step' };
+    const shouldForceVendorLookup = initialInputClassification.intent === 'vendor_lookup';
+
+    setRoutingDebugInfo({
+      intent: initialInputClassification.intent,
+      extractedSubject: initialInputClassification.extracted,
+      finalRoute: undefined,
+      source: undefined,
+      rule: initialInputClassification.rule
+    });
+
     if (!textToSend) {
       setInputText('');
     }
@@ -131,8 +536,175 @@ export default function AIAgentChat({
 
     // Handle bot logic processing based on state
     setTimeout(() => {
-      processAgentResponse(text);
+      processAgentResponse(text, initialInputClassification);
     }, 800);
+  };
+
+  const processAgentResponse = async (
+    userText: string,
+    classification: { intent: 'vendor_lookup' | 'general_chat'; extracted: string }
+  ) => {
+    setIsRequestInProgress(true);
+    const forceVendorLookup = classification.intent === 'vendor_lookup';
+
+    try {
+      const response = await fetch('/api/invoke-general-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: userText,
+          message: userText,
+          prompt: userText,
+          intent: forceVendorLookup ? 'vendor_lookup' : 'general_chat',
+          extracted_subject: forceVendorLookup ? classification.extracted : '',
+          conversation_id: conversationId
+        })
+      });
+
+      const data = (await response.json()) as GeneralBotResponse;
+      const isServerError =
+        !response.ok ||
+        data.ok === false ||
+        data.error?.code === 'response_parse_error' ||
+        data.status === 'error';
+
+      if (isServerError) {
+        setRegistrationState(prev => ({
+          ...prev,
+          currentStep: 'initial'
+        }));
+
+        await streamChatMessage(
+          setChatHistory,
+          `The server is temporarily unavailable. Please try again in a moment.`,
+          {
+            onFirstChunk: () => setIsRequestInProgress(false)
+          }
+        );
+        return;
+      }
+
+      const workflowState = getWorkflowStateFromResponse(data);
+      const responseText = data.text || 'No response text returned from the workflow router.';
+      const vendorName = getVendorDisplayName(data);
+      const tbmsVendor = getFirstTbmsVendor(data);
+      const showContactForm = shouldShowContactForm(data);
+      const shouldOpenContactSetup = forceVendorLookup && !tbmsVendor;
+      const tbmsLifecycleStatus = tbmsVendor
+        ? getVendorLifecycleStatus(
+            String(tbmsVendor.expDate || ''),
+            String(tbmsVendor.approvalStatus || '')
+          )
+        : null;
+      const finalWorkflowRoute = tbmsLifecycleStatus
+        ? tbmsLifecycleStatus === 'renewal_due'
+          ? 'renewal'
+          : tbmsLifecycleStatus === 'expired'
+            ? 'vendor'
+            : 'vendor'
+        : forceVendorLookup
+          ? 'vendor'
+        : workflowState.workflowRoute;
+      const finalWorkflowStatus = tbmsLifecycleStatus
+        ? tbmsLifecycleStatus
+        : forceVendorLookup
+          ? 'completed'
+        : workflowState.workflowStatus;
+      const routeSummary =
+        finalWorkflowRoute === 'general'
+          ? 'General bot'
+          : finalWorkflowRoute === 'vendor'
+            ? 'Vendor approval'
+            : 'Renewal approval';
+
+      setRoutingDebugInfo(prev => ({
+        ...prev,
+        finalRoute: finalWorkflowRoute,
+        source: getStructuredSource(data)
+      }));
+
+      setRegistrationState(prev => ({
+        ...prev,
+        companyName: prev.companyName || vendorName || userText,
+        workflowRoute: finalWorkflowRoute,
+        workflowStatus: finalWorkflowStatus,
+        workflowName: tbmsLifecycleStatus
+          ? tbmsLifecycleStatus === 'renewal_due'
+            ? 'Renewal-Vendor-Approval-Workflow'
+            : 'TCG-Vendor-Approval-Workflow'
+          : forceVendorLookup
+            ? 'TCG-Vendor-Approval-Workflow'
+          : workflowState.workflowName,
+        workflowApiPath: tbmsLifecycleStatus
+          ? tbmsLifecycleStatus === 'renewal_due'
+            ? '/api/renewal-vendor-approval-workflow'
+            : '/api/vendor-approval-workflow'
+          : forceVendorLookup
+            ? '/api/vendor-approval-workflow'
+          : workflowState.workflowApiPath,
+        currentStep: 'initial'
+      }));
+
+      if (tbmsVendor) {
+        const lifecycleStatus = tbmsLifecycleStatus || getVendorLifecycleStatus(
+          String(tbmsVendor.expDate || ''),
+          String(tbmsVendor.approvalStatus || '')
+        );
+
+        setVendorLookupSummary({
+          companyName: String(tbmsVendor.vendName || vendorName || userText).trim(),
+          tradeLicenseNo: String(tbmsVendor.tradeLicenseNo || 'N/A'),
+          approvalStatus: String(tbmsVendor.approvalStatus || 'N/A'),
+          lifecycleStatus,
+          routeLabel: getVendorRouteLabel(lifecycleStatus),
+          expDate: String(tbmsVendor.expDate || 'N/A'),
+          issueAuthority: String(tbmsVendor.issueAuthority || 'N/A'),
+          address: String(tbmsVendor.address || 'N/A').replace(/\r?\n/g, ', '),
+          phone: String(tbmsVendor.tel || 'N/A'),
+          email: String(tbmsVendor.email || 'N/A').replace(/\.$/, ''),
+          website: String(tbmsVendor.website || 'N/A'),
+          chamberNo: String(tbmsVendor.chamberNo || 'N/A'),
+          businessActivity: String(tbmsVendor.tradeActivities || 'N/A'),
+        });
+      } else if (forceVendorLookup || getStructuredSource(data) === 'tbms') {
+        setVendorLookupSummary(null);
+      } else {
+        setVendorLookupSummary(null);
+      }
+
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
+      }
+
+      await streamChatMessage(
+        setChatHistory,
+        tbmsVendor
+          ? `Vendor found: ${tbmsVendor.vendName}\nLicense: ${tbmsVendor.tradeLicenseNo || 'N/A'}\nStatus: ${tbmsVendor.approvalStatus || 'N/A'}\nExpiry: ${tbmsVendor.expDate || 'N/A'}\n\nRoute: ${routeSummary}`
+          : forceVendorLookup || getStructuredSource(data) === 'tbms'
+            ? `No vendor match found. Please enter the contact details below to continue.\n\nRoute: Vendor approval`
+          : `${responseText}\n\nRoute: ${routeSummary}`,
+        {
+          onFirstChunk: () => setIsRequestInProgress(false)
+        }
+      );
+
+      if (showContactForm || shouldOpenContactSetup) {
+        setRegistrationState(prev => ({
+          ...prev,
+          currentStep: 'contact_info'
+        }));
+      }
+    } catch (error: any) {
+      await streamChatMessage(
+        setChatHistory,
+        `The server is temporarily unavailable. Please try again in a moment.`,
+        {
+          onFirstChunk: () => setIsRequestInProgress(false)
+        }
+      );
+    } finally {
+      setIsRequestInProgress(false);
+    }
   };
 
   const handleSaveContactInfo = () => {
@@ -178,83 +750,9 @@ export default function AIAgentChat({
 
       await streamChatMessage(
         setChatHistory,
-        `✦ **Contact Details Registered** ✦\n\n- **Recipient Name**: "${cName}"\n- **Notification Channels**: Email (${cEmail}) & SMS (${cPhone})\n\nAwesome, we've enabled compliance system updates for you. Now, let's verify your company's credentials.\n\nPlease upload or drop your **Valid Trade License** (PDF) to proceed.`
+        `✦ **Contact Details Registered** ✦\n\n- **Recipient Name**: "${cName}"\n- **Notification Channels**: Email (${cEmail}) & SMS (${cPhone})\n\nNow, let's verify your company's credentials.\n\nPlease upload or drop your **Valid Trade License** (PDF) to proceed.`
       );
     }, 850);
-  };
-
-  const processAgentResponse = async (userText: string) => {
-    const currentStep = registrationState.currentStep;
-
-    let botResponse = '';
-    let nextStepState: any = {};
-
-    if (currentStep === 'initial') {
-      // Parse Company name from input
-      const companyName = userText;
-      botResponse = `Excellent! I have recorded your company as "**${companyName}**".\n\nTo ensure you receive direct email and SMS notifications regarding verification events and onboarding progress, please provide your contact details:\n\n• **Full Name**\n• **Email Address**\n• **Mobile Number**\n\nYou can fill them in the interactive form below!`;
-      
-      nextStepState = {
-        companyName: companyName,
-        currentStep: 'contact_info'
-      };
-    } else if (currentStep === 'contact_info') {
-      const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/;
-      const emailMatch = userText.match(emailRegex);
-      const email = emailMatch ? emailMatch[1] : '';
-
-      const phoneRegex = /(\+?[\d\s-]{7,15})/;
-      const phoneMatch = userText.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g, '').match(phoneRegex);
-      const phone = phoneMatch ? phoneMatch[1].trim() : '';
-
-      let name = userText
-        .replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g, '')
-        .replace(/(\+?[\d\s-]{7,15})/g, '')
-        .replace(/[,;|]/g, '')
-        .trim();
-      
-      if (!name || name.length > 30) {
-        name = 'Authorized Contact';
-      }
-
-      const mergedName = registrationState.contactName || name;
-      const mergedEmail = registrationState.contactEmail || email;
-      const mergedPhone = registrationState.phoneNumber || phone;
-
-      // Update state
-      setRegistrationState(prev => ({
-        ...prev,
-        contactName: mergedName,
-        contactEmail: mergedEmail,
-        phoneNumber: mergedPhone
-      }));
-
-      if (mergedEmail && mergedPhone) {
-        botResponse = `✦ **Contact Details Registered** ✦\n\n- **Recipient Name**: "${mergedName}"\n- **Notification Channels**: Email (${mergedEmail}) & SMS (${mergedPhone})\n\nAwesome, we've enabled compliance system updates for you. Now, let's verify your company's credentials.\n\nPlease upload or drop your **Valid Trade License** (e.g. PDF) to proceed.`;
-        nextStepState = {
-          currentStep: 'trade_license_upload'
-        };
-      } else {
-        botResponse = `Thanks for submitting contact details. I have pre-filled some of your information. Please confirm/fill the remaining fields in the **Notification Setup Form** card below to proceed!`;
-      }
-    } else if (currentStep === 'trade_license_upload' && !registrationState.documents.trade_license.extractedData) {
-      botResponse = `I'm still waiting for your **Trade License** document before we can proceed. Please drag-and-drop the file or click the upload icon to supply the document so we can trigger validation.`;
-    } else if (currentStep === 'vat_upload' && !registrationState.documents.vat_certificate.extractedData) {
-      botResponse = `Please upload or inject your **VAT Certificate** to proceed with real-time tax validation. Let me know if you are facing any issues!`;
-    } else if (currentStep === 'bank_document_upload' && !registrationState.documents.bank_document.extractedData) {
-      botResponse = `Please provide your official **Bank Document** (e.g., bank statement or letter) so our system can finalize alignment logs with banking clearing network databases.`;
-    } else if (currentStep === 'review') {
-      botResponse = `All your corporate documents are validated and logged! Please review the registry verification compliance report on the right scoreboard, and press the **"Complete & File Registration"** button to establish your authorized supplier profile.`;
-    } else {
-      botResponse = `Thank you! Your registration index has been published to our procurement portal ledger. You stand as a green-lit accredited supplier.`;
-    }
-
-    setRegistrationState(prev => ({
-      ...prev,
-      ...nextStepState
-    }));
-
-    await streamChatMessage(setChatHistory, botResponse);
   };
 
   // Upload actions orchestration
@@ -371,17 +869,38 @@ export default function AIAgentChat({
   };
 
   const getStepIndicator = () => {
-    const step = registrationState.currentStep;
-    if (step === 'initial') return 'Step 1: Account Identification';
-    if (step === 'contact_info') return 'Step 2: Notification Setup';
-    if (step === 'trade_license_upload') return 'Step 3: Trade License Audit';
-    if (step === 'vat_upload') return 'Step 4: VAT Compliance Audit';
-    if (step === 'bank_document_upload') return 'Step 5: Bank Account Clearance';
-    if (step === 'review') return 'Step 6: Compliance Scores';
-    return 'Registration Approved';
+    if (registrationState.currentStep === 'initial') return 'Step 1: Account Identification';
+    if (registrationState.currentStep === 'contact_info') return 'Step 2: Notification Setup';
+    if (registrationState.currentStep === 'trade_license_upload') return 'Step 3: Trade License Audit';
+    if (registrationState.currentStep === 'vat_upload') return 'Step 4: VAT Compliance Audit';
+    if (registrationState.currentStep === 'bank_document_upload') return 'Step 5: Bank Account Clearance';
+    if (registrationState.currentStep === 'review') return 'Step 6: Compliance Scores';
+    if (registrationState.workflowRoute === 'vendor') return 'Workflow: Vendor Approval';
+    if (registrationState.workflowRoute === 'renewal') return 'Workflow: Renewal Approval';
+    if (registrationState.workflowRoute === 'general') return 'Workflow: General Bot';
+    return 'Workflow: Awaiting Input';
   };
 
   const isAgentStreaming = chatHistory.some(message => message.sender === 'agent' && message.isPending);
+  const showContactSetup = registrationState.currentStep === 'contact_info' && registrationState.workflowRoute !== 'general';
+  const getRuleBadgeClasses = (rule?: string) => {
+    switch (rule) {
+      case 'explicit_lookup_phrase':
+      case 'keyword_lookup':
+      case 'standalone_name_like':
+        return 'text-emerald-700 bg-emerald-100 border-emerald-200';
+      case 'question':
+        return 'text-amber-700 bg-amber-100 border-amber-200';
+      case 'greeting':
+      case 'empty_input':
+        return 'text-slate-600 bg-slate-100 border-slate-200';
+      case 'not_name_like':
+      case 'non_initial_step':
+        return 'text-sky-700 bg-sky-100 border-sky-200';
+      default:
+        return 'text-violet-700 bg-violet-100 border-violet-200';
+    }
+  };
 
   return (
     <div className="flex flex-col h-[600px] border border-slate-200 bg-white rounded-lg overflow-hidden shadow-sm">
@@ -391,7 +910,7 @@ export default function AIAgentChat({
           <div className="w-8 h-8 rounded bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
             <Bot className="w-4 h-4" />
           </div>
-          <div>
+            <div>
             <h2 className="text-sm font-bold text-slate-900 tracking-tight">Onboarding Officer (AI Agent)</h2>
             <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -474,8 +993,70 @@ export default function AIAgentChat({
             </div>
           );
         })}
-        
-        {registrationState.currentStep === 'contact_info' && !isAgentStreaming && (
+
+        {vendorLookupSummary && (
+          <div className="max-w-[90%] mx-auto rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">Vendor Lookup Result</p>
+                <h3 className="text-sm font-bold text-slate-900 mt-1">{vendorLookupSummary.companyName}</h3>
+              </div>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
+                  vendorLookupSummary.lifecycleStatus === 'expired'
+                    ? 'text-rose-700 bg-rose-100 border-rose-200'
+                    : vendorLookupSummary.lifecycleStatus === 'renewal_due'
+                      ? 'text-amber-700 bg-amber-100 border-amber-200'
+                      : 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                }`}
+              >
+                {getVendorBadgeLabel(vendorLookupSummary)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
+              <div className="bg-white rounded border border-emerald-100 p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trade License No.</span>
+                <span className="font-mono font-semibold">{vendorLookupSummary.tradeLicenseNo}</span>
+              </div>
+              <div className="bg-white rounded border border-emerald-100 p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Expiry Date</span>
+                <span className="font-semibold">{vendorLookupSummary.expDate}</span>
+              </div>
+              <div className="bg-white rounded border border-emerald-100 p-2.5 sm:col-span-2">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Business Activity</span>
+                <span>{vendorLookupSummary.businessActivity}</span>
+              </div>
+              <div className="bg-white rounded border border-emerald-100 p-2.5 sm:col-span-2">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Address</span>
+                <span>{vendorLookupSummary.address}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+              <div className="bg-white rounded border border-emerald-100 p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Phone</span>
+                <span>{vendorLookupSummary.phone}</span>
+              </div>
+              <div className="bg-white rounded border border-emerald-100 p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Email</span>
+                <span className="break-all">{vendorLookupSummary.email}</span>
+              </div>
+              <div className="bg-white rounded border border-emerald-100 p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Chamber No.</span>
+                <span>{vendorLookupSummary.chamberNo}</span>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-emerald-800 font-medium">
+              Route: {vendorLookupSummary.routeLabel}
+              <span className="mx-1">•</span>
+              Source: TBMS lookup
+            </div>
+          </div>
+        )}
+
+        {showContactSetup && (
           <div className="bg-white border hover:border-indigo-200 border-indigo-100 rounded-lg p-5 shadow-sm space-y-3.5 max-w-[90%] mx-auto font-sans text-slate-800 animate-fade-in">
             <div className="flex items-center gap-2 text-indigo-700 font-bold text-xs uppercase tracking-wider border-b border-indigo-50 pb-2">
               <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
@@ -488,7 +1069,7 @@ export default function AIAgentChat({
                 <span>Please fix the highlighted fields before continuing.</span>
               </div>
             )}
-            
+
             <div className="space-y-3.5 text-xs">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
@@ -564,7 +1145,7 @@ export default function AIAgentChat({
             </div>
 
             <button
-              onClick={() => handleSaveContactInfo()}
+              onClick={handleSaveContactInfo}
               className="w-full text-[10px] uppercase tracking-widest bg-indigo-600 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-sm transition flex items-center justify-center gap-2 mt-2 shadow-xs"
             >
               <span>Save Contact Config & Proceed</span>
@@ -572,7 +1153,45 @@ export default function AIAgentChat({
             </button>
           </div>
         )}
-        
+
+        {showRoutingDebug && (
+          <div className="max-w-[90%] mx-auto rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-500 font-mono">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-bold uppercase tracking-widest text-slate-600">Routing Debug</span>
+              <span className="text-slate-400">Config: ON</span>
+            </div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>Intent: {routingDebugInfo.intent || 'n/a'}</div>
+              <div>Extracted: {routingDebugInfo.extractedSubject || 'n/a'}</div>
+              <div>Source: {routingDebugInfo.source || 'n/a'}</div>
+              <div>Final Route: {routingDebugInfo.finalRoute || 'n/a'}</div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <span>Rule:</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${getRuleBadgeClasses(routingDebugInfo.rule)}`}>
+                  {routingDebugInfo.rule || 'n/a'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isRequestInProgress && (
+          <div className="flex justify-start items-end gap-2">
+            <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 text-[10px] font-bold">
+              AI
+            </div>
+            <div className="max-w-[85%] rounded-lg rounded-bl-none px-4 py-3 text-xs leading-relaxed bg-white text-slate-800 border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+                <div>
+                  <p className="font-semibold text-slate-900">Processing request...</p>
+                  <p className="text-[10px] text-slate-500">Please wait while the routing engine responds.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={chatEndRef} />
       </div>
 
@@ -629,7 +1248,7 @@ export default function AIAgentChat({
 
       {/* Input Form area */}
       <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
-        <input
+          <input
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
@@ -637,16 +1256,16 @@ export default function AIAgentChat({
           placeholder={
             isUploading
               ? "Validation in progress... please wait..."
-              : registrationState.currentStep === 'initial' 
-                ? "Type Company Name to begin..." 
-                : "Ask a verification question, or type response..."
+              : isRequestInProgress
+                ? "Processing request..."
+              : "Describe the supplier request to route it..."
           }
           className="flex-1 text-xs bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition"
-          disabled={isUploading}
+          disabled={isUploading || isRequestInProgress}
         />
         <button
           onClick={() => handleSendMessage()}
-          disabled={!inputText.trim() || isUploading}
+          disabled={!inputText.trim() || isUploading || isRequestInProgress}
           className="p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition"
         >
           <Send className="w-4 h-4" />

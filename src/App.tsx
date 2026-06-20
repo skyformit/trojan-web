@@ -28,6 +28,10 @@ const initialRegistrationState: SupplierRegistrationState = {
   contactEmail: '',
   phoneNumber: '',
   country: '',
+  workflowStatus: undefined,
+  workflowRoute: '',
+  workflowName: '',
+  workflowApiPath: '',
   documents: {
     trade_license: { type: 'trade_license', fileName: '', uploadedAt: '', status: 'empty', validationLogs: [] },
     vat_certificate: { type: 'vat_certificate', fileName: '', uploadedAt: '', status: 'empty', validationLogs: [] },
@@ -58,6 +62,7 @@ export default function App() {
   const [registryRecords, setRegistryRecords] = useState<any[]>([]);
   const [showRegistryDrawer, setShowRegistryDrawer] = useState(false);
   const [submissionComplete, setSubmissionComplete] = useState(false);
+  const [showRoutingDebug, setShowRoutingDebug] = useState(false);
 
   // Fetch sandbox records from server to display in helper drawer
   const fetchRegistryRecords = async () => {
@@ -121,6 +126,7 @@ export default function App() {
 
       const extracted = analyzeData.extractedData;
       console.log("OCR Extracted values:", extracted);
+      const gptReview = analyzeData.rawResponse?.gpt_review;
 
       // 3. Mark OCR success and prompt the registry check starting
       setRegistrationState(prev => {
@@ -133,6 +139,7 @@ export default function App() {
               ...doc,
               status: 'ocr_completed',
               extractedData: extracted,
+              gptReview,
               processingTimeMs: analyzeData.processingTimeMs,
               processingTime: analyzeData.processingTime,
               validationLogs: [
@@ -343,6 +350,14 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             <button
+              onClick={() => setShowRoutingDebug(prev => !prev)}
+              className={`text-[10px] uppercase tracking-widest font-bold transition ${
+                showRoutingDebug ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {showRoutingDebug ? 'Hide Debug' : 'Show Debug'}
+            </button>
+            <button
               onClick={handleReset}
               className="text-[10px] uppercase tracking-widest font-bold text-slate-400 hover:text-slate-600 transition"
             >
@@ -461,6 +476,7 @@ export default function App() {
                 onAnalyzeDocument={handleAnalyzeDocument}
                 chatHistory={chatHistory}
                 setChatHistory={setChatHistory}
+                showRoutingDebug={showRoutingDebug}
               />
             </div>
             

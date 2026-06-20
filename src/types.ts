@@ -18,6 +18,12 @@ export interface DocumentVerification {
   uploadedAt: string;
   status: 'empty' | 'verifying' | 'ocr_completed' | 'registry_check' | 'verified' | 'failed';
   extractedData?: Record<string, string>;
+  gptReview?: {
+    isConsistent: boolean;
+    anomalies: string[];
+    plausibility_score: number;
+    reasoning: string;
+  };
   validationLogs: string[];
   processingTimeMs?: number;
   processingTime?: string;
@@ -36,6 +42,10 @@ export interface SupplierRegistrationState {
   contactEmail: string;
   phoneNumber: string;
   country: string;
+  workflowStatus?: 'completed' | 'expired' | 'renewal_due';
+  workflowRoute?: 'general' | 'vendor' | 'renewal' | '';
+  workflowName?: string;
+  workflowApiPath?: string;
   documents: {
     trade_license: DocumentVerification;
     vat_certificate: DocumentVerification;

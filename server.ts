@@ -7,6 +7,9 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || "127.0.0.1";
+const GENERAL_BOT_ENDPOINT = process.env.GENERAL_BOT_ENDPOINT || "";
+const TBMS_VENDOR_LOOKUP_ENDPOINT = process.env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
 
 type DocumentType = "trade_license" | "vat_certificate" | "bank_document";
 
@@ -20,20 +23,46 @@ type AzureValidationResponse = {
   };
 };
 
+type GeneralBotResponse = {
+  ok?: boolean;
+  status?: "completed" | "expired" | "renewal_due" | string;
+  text?: string;
+  source?: string;
+  origin?: string;
+  source_type?: string;
+  response_type?: string;
+  conversation_id?: string;
+  routing?: {
+    expiry_date?: string;
+    days_remaining?: number;
+    status?: "completed" | "expired" | "renewal_due" | string;
+    workflow_name?: string;
+  };
+  workflow_started?: boolean;
+  agent?: {
+    name?: string;
+    version?: string;
+  };
+  warning?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 const VALIDATION_ENDPOINTS: Record<
   DocumentType,
   { url: string; ocrSource: string }
 > = {
   trade_license: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateTradeLicense?code=drayAXzDlc9JFtMuPoxdlhAaekt84LKJHrWEcnjmz40uAzFu1sXXIg%3D%3D",
+    url: process.env.TRADE_LICENSE_VALIDATE_ENDPOINT || "",
     ocrSource: "azure_validate_trade_license",
   },
   vat_certificate: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateVAT?code=EAN5oM7CKZSNjgg3HKO-kHz4I8YOZ7Nq5LQfpvMbJGXzAzFueDuLBw%3D%3D",
+    url: process.env.VAT_VALIDATE_ENDPOINT || "",
     ocrSource: "azure_validate_vat",
   },
   bank_document: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateBankDocument?code=VLHaPcPmNrSDrlXgyy7fsx3Th9-S2jjxwriAn9ewT-CyAzFueFYoYg%3D%3D",
+    url: process.env.BANK_VALIDATE_ENDPOINT || "",
     ocrSource: "azure_validate_bank_document",
   },
 };
@@ -60,6 +89,145 @@ function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
 function getBase64Payload(fileBase64: string) {
   const separatorIndex = fileBase64.indexOf(",");
   return separatorIndex >= 0 ? fileBase64.slice(separatorIndex + 1) : fileBase64;
+}
+
+function parseExpiryDateFromText(text: string) {
+  const patterns = [
+    /(?:Trade License Expiry(?: \(last on record\))?:?\s*)(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i,
+    /(?:expires on|expired on|expiry date(?: is listed as)?)(?:\s+is\s+listed\s+as)?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i,
+    /(\d{4}-\d{2}-\d{2})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const parsed = new Date(match[1]);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeGeneralBotResponse(payload: GeneralBotResponse): GeneralBotResponse {
+  const structuredSource = Boolean(payload.source_type || payload.response_type || payload.source || payload.origin);
+  if (structuredSource) {
+    return payload;
+  }
+
+  const text = payload.text || "";
+  const statusFromPayload = payload.status || payload.routing?.status || "completed";
+  const expiryDate = parseExpiryDateFromText(text);
+  const lowerText = text.toLowerCase();
+
+  const inferredStatus =
+    expiryDate && expiryDate.getTime() < Date.now()
+      ? "expired"
+      : lowerText.includes("renewal_due") || lowerText.includes("renewal")
+        ? "renewal_due"
+        : statusFromPayload;
+
+  if (inferredStatus === "expired") {
+    return {
+      ...payload,
+      status: "expired",
+      ok: false,
+      routing: {
+        expiry_date: expiryDate ? expiryDate.toISOString().slice(0, 10) : payload.routing?.expiry_date,
+        days_remaining: expiryDate ? Math.floor((expiryDate.getTime() - Date.now()) / 86400000) : payload.routing?.days_remaining,
+        status: "expired",
+        workflow_name: "TCG-Vendor-Approval-Workflow",
+      },
+      workflow_started: true,
+    };
+  }
+
+  if (inferredStatus === "renewal_due") {
+    return {
+      ...payload,
+      status: "renewal_due",
+      routing: {
+        expiry_date: payload.routing?.expiry_date,
+        days_remaining: payload.routing?.days_remaining,
+        status: "renewal_due",
+        workflow_name: "Renewal-Vendor-Approval-Workflow",
+      },
+      workflow_started: true,
+    };
+  }
+
+  return {
+    ...payload,
+    status: "completed",
+    routing: {
+      expiry_date: payload.routing?.expiry_date,
+      days_remaining: payload.routing?.days_remaining,
+      status: "completed",
+      workflow_name: payload.agent?.name || "GENERAL_CHAT_AGENT_ID",
+    },
+  };
+}
+
+function looksLikeVendorLookupInput(value: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    return true;
+  }
+
+  const hasVendorKeyword = /\b(llc|l\.l\.c|ltd|limited|trading|company|corp|corporation|enterprise|est|fze|fzc)\b/i.test(normalized);
+  return hasVendorKeyword || normalized.split(/\s+/).length >= 2 || normalized.toLowerCase().includes("trade license");
+}
+
+async function fetchVendorLookupFallback(inputText: string) {
+  const trimmed = inputText.trim();
+  const isLicenseNumber = /^\d+$/.test(trimmed);
+
+  const payload = {
+    vendorName: isLicenseNumber ? "" : trimmed,
+    vendId: -1,
+    licenseNo: isLicenseNumber ? trimmed : "",
+    email: "",
+    statusId: -1,
+  };
+
+  const externalRes = await fetch(TBMS_VENDOR_LOOKUP_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawResponse = await externalRes.text();
+  let parsedResponse: any;
+
+  try {
+    parsedResponse = JSON.parse(rawResponse);
+  } catch {
+    parsedResponse = {
+      ok: externalRes.ok,
+      status: externalRes.ok ? "completed" : "error",
+      text: rawResponse || "Vendor lookup returned a non-JSON response.",
+    };
+  }
+
+  return {
+    ...parsedResponse,
+    source: "tbms",
+    origin: "tbms",
+    source_type: "tbms",
+    status: "completed",
+    routing: {
+      status: "completed",
+      workflow_name: "GENERAL_CHAT_AGENT_ID",
+    },
+  };
 }
 
 function normalizeText(value: string) {
@@ -280,6 +448,97 @@ app.get("/api/government-records", (req, res) => {
     description: "Sandbox Government Business registries connected in sandbox environment.",
     records: governmentRegistries
   });
+});
+
+// REST API: General bot routing entrypoint
+app.post("/api/invoke-general-bot", async (req, res) => {
+  try {
+    const inputText =
+      req.body?.text ||
+      req.body?.message ||
+      req.body?.prompt ||
+      req.body?.input ||
+      req.query?.text ||
+      req.query?.message ||
+      "";
+    const useVendorFallback = looksLikeVendorLookupInput(inputText);
+    const explicitIntent = String(req.body?.intent || req.query?.intent || "").toLowerCase();
+    const forceVendorLookup = explicitIntent === "vendor_lookup";
+
+    const payload = {
+      text: inputText,
+      message: inputText,
+      prompt: inputText,
+      input: inputText,
+      conversation_id:
+        req.body?.conversation_id ||
+        req.body?.conversationId ||
+        req.query?.conversation_id ||
+        req.query?.conversationId ||
+        "",
+    };
+
+    if (forceVendorLookup) {
+      const vendorFallback = await fetchVendorLookupFallback(inputText);
+      return res.status(200).json(vendorFallback);
+    }
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), 15000);
+    let externalRes: Response;
+
+    try {
+      externalRes = await fetch(GENERAL_BOT_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (fetchError: any) {
+      if (forceVendorLookup || useVendorFallback) {
+        const vendorFallback = await fetchVendorLookupFallback(inputText);
+        clearTimeout(timeoutHandle);
+        return res.status(200).json(vendorFallback);
+      }
+
+      clearTimeout(timeoutHandle);
+      throw fetchError;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+
+    const rawResponse = await externalRes.text();
+    let parsedResponse: any;
+
+    try {
+      parsedResponse = JSON.parse(rawResponse);
+    } catch {
+      parsedResponse = {
+        ok: externalRes.ok,
+        status: externalRes.ok ? "completed" : "error",
+        text: rawResponse || "General bot returned a non-JSON response.",
+      };
+    }
+
+    if (
+      useVendorFallback &&
+      (parsedResponse?.ok === false || parsedResponse?.error?.code === "response_parse_error")
+    ) {
+      const vendorFallback = await fetchVendorLookupFallback(inputText);
+      return res.status(200).json(vendorFallback);
+    }
+
+    return res.status(externalRes.status).json(normalizeGeneralBotResponse(parsedResponse));
+  } catch (error: any) {
+    console.error("Error in /api/invoke-general-bot:", error);
+    return res.status(500).json({
+      ok: false,
+      status: "error",
+      text: error.message || "Internal server error during general bot routing",
+    });
+  }
 });
 
 // REST API: Automated Document Extraction and Pre-validation
@@ -513,7 +772,10 @@ app.post("/api/verify-government", (req, res) => {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        host: HOST,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -525,8 +787,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Supplier Registration server running on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Supplier Registration server running on http://${HOST}:${PORT}`);
   });
 }
 
