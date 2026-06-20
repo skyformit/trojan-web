@@ -461,9 +461,10 @@ app.post("/api/invoke-general-bot", async (req, res) => {
       req.query?.text ||
       req.query?.message ||
       "";
-    const useVendorFallback = looksLikeVendorLookupInput(inputText);
     const explicitIntent = String(req.body?.intent || req.query?.intent || "").toLowerCase();
     const forceVendorLookup = explicitIntent === "vendor_lookup";
+    const localHeuristicsEnabled = process.env.ENABLE_LOCAL_ROUTING_HEURISTICS === "true";
+    const useVendorFallback = localHeuristicsEnabled && looksLikeVendorLookupInput(inputText);
 
     const payload = {
       text: inputText,

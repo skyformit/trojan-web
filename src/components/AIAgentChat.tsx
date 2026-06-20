@@ -12,6 +12,9 @@ interface AIAgentChatProps {
   showRoutingDebug?: boolean;
 }
 
+const ENABLE_LOCAL_ROUTING_HEURISTICS =
+  import.meta.env.VITE_ENABLE_LOCAL_ROUTING_HEURISTICS === 'true';
+
 type GeneralBotResponse = {
   ok?: boolean;
   status?: 'completed' | 'expired' | 'renewal_due' | string;
@@ -506,10 +509,9 @@ export default function AIAgentChat({
     if (!text) return;
 
     const initialInputClassification =
-      registrationState.currentStep === 'initial'
+      ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
         ? classifyInitialInput(text)
-        : { intent: 'general_chat' as const, extracted: '', rule: 'non_initial_step' };
-    const shouldForceVendorLookup = initialInputClassification.intent === 'vendor_lookup';
+        : { intent: 'general_chat' as const, extracted: '', rule: 'llm_only' };
 
     setRoutingDebugInfo({
       intent: initialInputClassification.intent,
@@ -545,7 +547,7 @@ export default function AIAgentChat({
     classification: { intent: 'vendor_lookup' | 'general_chat'; extracted: string }
   ) => {
     setIsRequestInProgress(true);
-    const forceVendorLookup = classification.intent === 'vendor_lookup';
+    const forceVendorLookup = ENABLE_LOCAL_ROUTING_HEURISTICS && classification.intent === 'vendor_lookup';
 
     try {
       const response = await fetch('/api/invoke-general-bot', {

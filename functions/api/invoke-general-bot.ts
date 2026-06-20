@@ -177,7 +177,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       String(input?.text || input?.message || input?.prompt || input?.input || "").trim();
     const explicitIntent = String(input?.intent || "").toLowerCase();
     const forceVendorLookup = explicitIntent === "vendor_lookup";
-    const useVendorFallback = looksLikeVendorLookupInput(inputText);
 
     const payload = {
       text: inputText,
@@ -189,6 +188,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
 
     const GENERAL_BOT_ENDPOINT = env.GENERAL_BOT_ENDPOINT || "";
     const TBMS_VENDOR_LOOKUP_ENDPOINT = env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
+    const localHeuristicsEnabled = env.ENABLE_LOCAL_ROUTING_HEURISTICS === "true";
+    const useVendorFallback = localHeuristicsEnabled && looksLikeVendorLookupInput(inputText);
 
     if (!GENERAL_BOT_ENDPOINT || !TBMS_VENDOR_LOOKUP_ENDPOINT) {
       return json(

@@ -16,6 +16,7 @@ export type PagesEnvBindings = {
   TRADE_LICENSE_VALIDATE_ENDPOINT?: string;
   VAT_VALIDATE_ENDPOINT?: string;
   BANK_VALIDATE_ENDPOINT?: string;
+  ENABLE_LOCAL_ROUTING_HEURISTICS?: string;
 };
 
 export const governmentRegistries = [
