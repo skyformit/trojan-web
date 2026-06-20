@@ -10,6 +10,14 @@ export type AzureValidationResponse = {
   };
 };
 
+export type PagesEnvBindings = {
+  GENERAL_BOT_ENDPOINT?: string;
+  TBMS_VENDOR_LOOKUP_ENDPOINT?: string;
+  TRADE_LICENSE_VALIDATE_ENDPOINT?: string;
+  VAT_VALIDATE_ENDPOINT?: string;
+  BANK_VALIDATE_ENDPOINT?: string;
+};
+
 export const governmentRegistries = [
   {
     companyName: "MODEC BUILDING MATERIALS TRADING (LLC)",
@@ -41,23 +49,25 @@ export function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
 
-export const VALIDATION_ENDPOINTS: Record<
+export function getValidationEndpoints(env?: PagesEnvBindings): Record<
   DocumentType,
   { url: string; ocrSource: string }
-> = {
-  trade_license: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateTradeLicense?code=drayAXzDlc9JFtMuPoxdlhAaekt84LKJHrWEcnjmz40uAzFu1sXXIg%3D%3D",
-    ocrSource: "azure_validate_trade_license",
-  },
-  vat_certificate: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateVAT?code=EAN5oM7CKZSNjgg3HKO-kHz4I8YOZ7Nq5LQfpvMbJGXzAzFueDuLBw%3D%3D",
-    ocrSource: "azure_validate_vat",
-  },
-  bank_document: {
-    url: "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/ValidateBankDocument?code=VLHaPcPmNrSDrlXgyy7fsx3Th9-S2jjxwriAn9ewT-CyAzFueFYoYg%3D%3D",
-    ocrSource: "azure_validate_bank_document",
-  },
-};
+> {
+  return {
+    trade_license: {
+      url: env?.TRADE_LICENSE_VALIDATE_ENDPOINT || "",
+      ocrSource: "azure_validate_trade_license",
+    },
+    vat_certificate: {
+      url: env?.VAT_VALIDATE_ENDPOINT || "",
+      ocrSource: "azure_validate_vat",
+    },
+    bank_document: {
+      url: env?.BANK_VALIDATE_ENDPOINT || "",
+      ocrSource: "azure_validate_bank_document",
+    },
+  };
+}
 
 export function getResultValue(
   results: AzureValidationResponse["results"],

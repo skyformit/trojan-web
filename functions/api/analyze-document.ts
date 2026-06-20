@@ -1,10 +1,11 @@
 import {
   DocumentType,
   AzureValidationResponse,
-  VALIDATION_ENDPOINTS,
   getBase64Payload,
   getMimeTypeFromDataUrl,
+  getValidationEndpoints,
   normalizeValidationResponse,
+  PagesEnvBindings,
 } from "../_shared";
 
 function toFileBuffer(fileBase64: string) {
@@ -19,7 +20,7 @@ function toFileBuffer(fileBase64: string) {
   return bytes;
 }
 
-export async function onRequestPost({ request }: { request: Request }) {
+export async function onRequestPost({ request, env }: { request: Request; env: PagesEnvBindings }) {
   try {
     const startedAt = performance.now();
     const { documentType, fileBase64, mimeType } = (await request.json()) as {
@@ -32,9 +33,13 @@ export async function onRequestPost({ request }: { request: Request }) {
       return Response.json({ error: "documentType parameter is required" }, { status: 400 });
     }
 
-    const validationConfig = VALIDATION_ENDPOINTS[documentType as DocumentType];
+    const validationConfig = getValidationEndpoints(env)[documentType as DocumentType];
     if (!validationConfig) {
       return Response.json({ error: "Unsupported documentType parameter" }, { status: 400 });
+    }
+
+    if (!validationConfig.url) {
+      return Response.json({ error: "Validation endpoint is not configured." }, { status: 500 });
     }
 
     if (!fileBase64) {

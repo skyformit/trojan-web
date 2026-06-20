@@ -1,10 +1,5 @@
 import { json } from "../_shared";
-
-const GENERAL_BOT_ENDPOINT =
-  process.env.GENERAL_BOT_ENDPOINT || "";
-
-const TBMS_VENDOR_LOOKUP_ENDPOINT =
-  process.env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
+import { PagesEnvBindings } from "../_shared";
 
 type GeneralBotResponse = {
   ok?: boolean;
@@ -129,7 +124,7 @@ function looksLikeVendorLookupInput(value: string) {
   return hasVendorKeyword || normalized.split(/\s+/).length >= 2 || normalized.toLowerCase().includes("trade license");
 }
 
-async function fetchVendorLookupFallback(inputText: string) {
+async function fetchVendorLookupFallback(inputText: string, tbmsVendorLookupEndpoint: string) {
   const trimmed = inputText.trim();
   const isLicenseNumber = /^\d+$/.test(trimmed);
 
@@ -141,7 +136,7 @@ async function fetchVendorLookupFallback(inputText: string) {
     statusId: -1,
   };
 
-  const externalRes = await fetch(TBMS_VENDOR_LOOKUP_ENDPOINT, {
+  const externalRes = await fetch(tbmsVendorLookupEndpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -175,7 +170,7 @@ async function fetchVendorLookupFallback(inputText: string) {
   };
 }
 
-export async function onRequestPost({ request }: { request: Request }) {
+export async function onRequestPost({ request, env }: { request: Request; env: PagesEnvBindings }) {
   try {
     const input = (await request.json()) as Record<string, unknown>;
     const inputText =
@@ -192,6 +187,9 @@ export async function onRequestPost({ request }: { request: Request }) {
       conversation_id: String(input?.conversation_id || input?.conversationId || ""),
     };
 
+    const GENERAL_BOT_ENDPOINT = env.GENERAL_BOT_ENDPOINT || "";
+    const TBMS_VENDOR_LOOKUP_ENDPOINT = env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
+
     if (!GENERAL_BOT_ENDPOINT || !TBMS_VENDOR_LOOKUP_ENDPOINT) {
       return json(
         {
@@ -204,7 +202,7 @@ export async function onRequestPost({ request }: { request: Request }) {
     }
 
     if (forceVendorLookup) {
-      return json(await fetchVendorLookupFallback(inputText));
+      return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
     }
 
     const controller = new AbortController();
@@ -237,13 +235,13 @@ export async function onRequestPost({ request }: { request: Request }) {
         useVendorFallback &&
         (parsedResponse?.ok === false || parsedResponse?.error?.code === "response_parse_error")
       ) {
-        return json(await fetchVendorLookupFallback(inputText));
+        return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
       }
 
       return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);
     } catch (error: any) {
       if (forceVendorLookup || useVendorFallback) {
-        return json(await fetchVendorLookupFallback(inputText));
+        return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
       }
 
       return json(
