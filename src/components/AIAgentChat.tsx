@@ -713,6 +713,11 @@ export default function AIAgentChat({
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
+    if (showContactSetup) {
+      setInputText('');
+      return;
+    }
+
     const initialInputClassification =
       ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
         ? classifyInitialInput(text)
@@ -738,17 +743,69 @@ export default function AIAgentChat({
     setChatHistory(prev => [...prev, newUserMessage]);
 
     if (ENABLE_GUIDED_ONBOARDING_FLOW) {
+      if (
+        !guidedOnboardingActive &&
+        registrationState.currentStep === 'initial' &&
+        initialInputClassification.intent === 'vendor_lookup' &&
+        validateGuidedCompanyName(initialInputClassification.extracted || text).valid
+      ) {
+        const candidateCompanyName = initialInputClassification.extracted || text;
+        const validation = validateGuidedCompanyName(candidateCompanyName);
+
+        if (validation.valid) {
+          setGuidedOnboardingActive(false);
+          setGuidedOnboardingStepIndex(-1);
+          setIsRequestInProgress(true);
+          setGuidedInlineError('');
+          setConversationId(null);
+          setVendorLookupSummary(null);
+          setRegistrationState(prev => ({
+            ...prev,
+            companyName: candidateCompanyName,
+            currentStep: 'contact_info',
+            workflowRoute: 'general',
+            workflowStatus: 'completed',
+            workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
+            workflowApiPath: '/api/invoke-general-bot'
+          }));
+
+          setIsRequestInProgress(false);
+
+          return;
+        }
+      }
+
       const shouldStartGuidedOnboarding = !guidedOnboardingActive && isGuidedOnboardingTrigger(text);
 
       if (shouldStartGuidedOnboarding) {
         const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
-        const startIndex = hasValidStoredCompanyName ? 1 : 0;
-        activateGuidedOnboarding(startIndex);
+        if (hasValidStoredCompanyName) {
+          setGuidedOnboardingActive(false);
+          setGuidedOnboardingStepIndex(-1);
+          setContactValidationAttempted(false);
+          setContactErrors({});
+          setRegistrationState(prev => ({
+            ...prev,
+            currentStep: 'contact_info',
+            workflowRoute: 'general',
+            workflowStatus: 'completed',
+            workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
+            workflowApiPath: '/api/invoke-general-bot'
+          }));
+
+          setTimeout(() => {
+            setIsRequestInProgress(false);
+          }, 350);
+
+          return;
+        }
+
+        activateGuidedOnboarding(0);
 
         setTimeout(async () => {
           await streamChatMessage(
             setChatHistory,
-            getGuidedOnboardingStartPrompt(startIndex, hasValidStoredCompanyName ? registrationState.companyName : undefined),
+            getGuidedOnboardingStartPrompt(0),
             {
               onFirstChunk: () => setIsRequestInProgress(false)
             }
@@ -775,8 +832,6 @@ export default function AIAgentChat({
 
             setGuidedInlineError('');
             const answer = candidate;
-            const nextQuestionIndex = guidedOnboardingStepIndex + 1;
-            const nextQuestion = getGuidedOnboardingQuestion(nextQuestionIndex);
 
             setGuidedOnboardingAnswers(prev => ({
               ...prev,
@@ -784,41 +839,19 @@ export default function AIAgentChat({
             }));
 
             setRegistrationState(prev => applyGuidedAnswerToRegistrationState(prev, currentQuestion.field, answer));
-            setGuidedOnboardingStepIndex(nextQuestionIndex);
+            setGuidedOnboardingActive(false);
+            setGuidedOnboardingStepIndex(-1);
             setIsRequestInProgress(true);
 
             setTimeout(async () => {
-              if (nextQuestion) {
-                await streamChatMessage(
-                  setChatHistory,
-                  `Captured your ${getGuidedOnboardingFieldLabel(currentQuestion.field)}.\n\n${formatGuidedOnboardingPrompt(nextQuestion.prompt)}`,
-                  {
-                    onFirstChunk: () => setIsRequestInProgress(false)
-                  }
-                );
-              } else {
-                setGuidedOnboardingActive(false);
-                setGuidedOnboardingStepIndex(-1);
-                setRegistrationState(prev => ({
-                  ...prev,
-                  currentStep: 'trade_license_upload',
-                  workflowRoute: 'general',
-                  workflowStatus: 'completed',
-                  workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-                  workflowApiPath: '/api/invoke-general-bot'
-                }));
+              setRegistrationState(prev => ({
+                ...prev,
+                currentStep: 'contact_info',
+                workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
+                workflowApiPath: '/api/invoke-general-bot'
+              }));
 
-                await streamChatMessage(
-                  setChatHistory,
-                  getGuidedOnboardingCompletionPrompt({
-                    ...guidedOnboardingAnswers,
-                    [currentQuestion.field]: answer
-                  }),
-                  {
-                    onFirstChunk: () => setIsRequestInProgress(false)
-                  }
-                );
-              }
+              setIsRequestInProgress(false);
             }, 350);
 
             return;
@@ -1236,7 +1269,9 @@ export default function AIAgentChat({
   };
 
   const isAgentStreaming = chatHistory.some(message => message.sender === 'agent' && message.isPending);
-  const showContactSetup = registrationState.currentStep === 'contact_info' && registrationState.workflowRoute !== 'general';
+  const showContactSetup =
+    registrationState.currentStep === 'contact_info' &&
+    (registrationState.workflowRoute !== 'general' || registrationState.workflowName === 'GUIDED_SUPPLIER_ONBOARDING');
 
   const activateGuidedOnboarding = (startIndex = 0) => {
     setGuidedOnboardingActive(true);
@@ -1259,11 +1294,29 @@ export default function AIAgentChat({
 
   const startGuidedOnboarding = () => {
     const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
-    const startIndex = hasValidStoredCompanyName ? 1 : 0;
-    activateGuidedOnboarding(startIndex);
+    if (hasValidStoredCompanyName) {
+      setGuidedOnboardingActive(false);
+      setGuidedOnboardingStepIndex(-1);
+      setContactValidationAttempted(false);
+      setContactErrors({});
+      setIsRequestInProgress(true);
+      setRegistrationState(prev => ({
+        ...prev,
+        currentStep: 'contact_info',
+        workflowRoute: 'general',
+        workflowStatus: 'completed',
+        workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
+        workflowApiPath: '/api/invoke-general-bot'
+      }));
+
+      setIsRequestInProgress(false);
+      return;
+    }
+
+    activateGuidedOnboarding(0);
     void streamChatMessage(
       setChatHistory,
-      getGuidedOnboardingStartPrompt(startIndex, hasValidStoredCompanyName ? registrationState.companyName : undefined),
+      getGuidedOnboardingStartPrompt(0),
       {
         onFirstChunk: () => setIsRequestInProgress(false)
       }
@@ -1629,20 +1682,22 @@ export default function AIAgentChat({
               ? 'Validation in progress... please wait...'
               : isRequestInProgress
                 ? 'Processing request...'
+                : showContactSetup
+                  ? 'Use the contact form below...'
                 : guidedOnboardingActive
                   ? 'Type your answer...'
                   : 'Describe the supplier request to route it...'
           }
           className={`flex-1 text-xs bg-slate-50 border text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:bg-white transition ${
-            guidedOnboardingActive && guidedInlineError
+            (guidedOnboardingActive && guidedInlineError) || showContactSetup
               ? 'border-rose-300 focus:ring-rose-500'
               : 'border-slate-200 focus:ring-indigo-500'
           }`}
-          disabled={isUploading || isRequestInProgress}
+          disabled={isUploading || isRequestInProgress || showContactSetup}
         />
         <button
           onClick={() => handleSendMessage()}
-          disabled={!inputText.trim() || isUploading || isRequestInProgress}
+          disabled={!inputText.trim() || isUploading || isRequestInProgress || showContactSetup}
           className="p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition"
         >
           <Send className="w-4 h-4" />
