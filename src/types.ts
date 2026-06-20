@@ -38,9 +38,12 @@ export interface DocumentVerification {
 
 export interface SupplierRegistrationState {
   companyName: string;
+  tradeLicenseNumber?: string;
+  vatNumber?: string;
   contactName: string;
   contactEmail: string;
   phoneNumber: string;
+  companyAddress?: string;
   country: string;
   workflowStatus?: 'completed' | 'expired' | 'renewal_due';
   workflowRoute?: 'general' | 'vendor' | 'renewal' | '';

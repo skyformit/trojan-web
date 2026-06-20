@@ -125,7 +125,7 @@ export default function App() {
 
       const extracted = analyzeData.extractedData;
       console.log("OCR Extracted values:", extracted);
-      const gptReview = analyzeData.rawResponse?.gpt_review;
+      const gptReview = analyzeData.gptReview || analyzeData.rawResponse?.gpt_review;
 
       // 3. Mark OCR success and prompt the registry check starting
       setRegistrationState(prev => {

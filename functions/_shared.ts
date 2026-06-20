@@ -4,6 +4,12 @@ export type AzureValidationResponse = {
   status?: string;
   score?: number | null;
   results?: Record<string, { value?: string; confidence?: number }>;
+  gpt_review?: {
+    is_consistent?: boolean;
+    anomalies?: string[];
+    plausibility_score?: number;
+    reasoning?: string;
+  };
   error?: {
     code?: string;
     message?: string;

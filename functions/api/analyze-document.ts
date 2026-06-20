@@ -8,6 +8,13 @@ import {
   PagesEnvBindings,
 } from "../_shared";
 
+type ExpertReview = {
+  is_consistent: boolean;
+  anomalies: string[];
+  plausibility_score: number;
+  reasoning: string;
+};
+
 function toFileBuffer(fileBase64: string) {
   const base64Payload = getBase64Payload(fileBase64);
   const binary = atob(base64Payload);
@@ -18,6 +25,76 @@ function toFileBuffer(fileBase64: string) {
   }
 
   return bytes;
+}
+
+function getResultValue(
+  results: AzureValidationResponse["results"],
+  keys: string[]
+) {
+  for (const key of keys) {
+    const value = results?.[key]?.value?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function buildFallbackExpertReview(
+  documentType: DocumentType,
+  parsedResponse: AzureValidationResponse,
+  extractedData: Record<string, unknown>
+): ExpertReview {
+  const results = parsedResponse.results || {};
+  const anomalies: string[] = [];
+  const confidenceWarnings = Object.entries(results)
+    .filter(([, field]) => typeof field.confidence === "number" && (field.confidence ?? 0) < 0.5)
+    .slice(0, 3)
+    .map(([field, value]) => `${field} confidence is low (${(value.confidence ?? 0).toFixed(3)}).`);
+
+  const addIfMissing = (label: string, value: unknown) => {
+    if (!String(value ?? "").trim()) {
+      anomalies.push(`${label} is missing or unreadable.`);
+    }
+  };
+
+  if (documentType === "trade_license") {
+    addIfMissing("License number", extractedData.licenseNumber);
+    addIfMissing("Company name", extractedData.companyName);
+    addIfMissing("Expiry date", extractedData.expiryDate);
+  } else if (documentType === "vat_certificate") {
+    addIfMissing("VAT / TRN", extractedData.vatNumber || extractedData.taxRegistrationNumber);
+    addIfMissing("Company name", extractedData.companyName);
+  } else {
+    addIfMissing("Bank account number", extractedData.bankAccountNumber);
+    addIfMissing("Bank name", extractedData.bankName);
+    addIfMissing("Company name", extractedData.companyName);
+  }
+
+  anomalies.push(...confidenceWarnings);
+
+  const uniqueAnomalies = Array.from(new Set(anomalies));
+  const isConsistent = uniqueAnomalies.length === 0 && parsedResponse.status === "success";
+  const baseScore = typeof parsedResponse.score === "number" ? parsedResponse.score : 0.75;
+  const penalty = Math.min(uniqueAnomalies.length * 0.12, 0.45);
+  const plausibility_score = Number(Math.max(0, Math.min(1, baseScore - penalty)).toFixed(4));
+
+  const documentLabel =
+    documentType === "trade_license"
+      ? "trade license"
+      : documentType === "vat_certificate"
+        ? "VAT certificate"
+        : "bank document";
+
+  return {
+    is_consistent: isConsistent,
+    anomalies: uniqueAnomalies,
+    plausibility_score,
+    reasoning: uniqueAnomalies.length > 0
+      ? `Automated review flagged ${documentLabel} extraction inconsistencies that should be checked before approval.`
+      : `Automated review found the ${documentLabel} extraction to be internally consistent.`,
+  };
 }
 
 export async function onRequestPost({ request, env }: { request: Request; env: PagesEnvBindings }) {
@@ -89,6 +166,16 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
     }
 
     const processingTimeMs = Math.round(performance.now() - startedAt);
+    const extractedData = normalizeValidationResponse(
+      documentType as DocumentType,
+      parsedResponse
+    );
+    const fallbackReview = buildFallbackExpertReview(
+      documentType as DocumentType,
+      parsedResponse,
+      extractedData as Record<string, unknown>
+    );
+    const mergedGptReview = parsedResponse.gpt_review || fallbackReview;
 
     return Response.json({
       status: "success",
@@ -97,11 +184,12 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       score: parsedResponse.score ?? null,
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
-      extractedData: normalizeValidationResponse(
-        documentType as DocumentType,
-        parsedResponse
-      ),
-      rawResponse: parsedResponse,
+      extractedData,
+      gptReview: mergedGptReview,
+      rawResponse: {
+        ...parsedResponse,
+        gpt_review: mergedGptReview,
+      },
     });
   } catch (error: any) {
     return Response.json(
