@@ -8,6 +8,7 @@ import {
   getGuidedOnboardingCompletionPrompt,
   getGuidedOnboardingFieldLabel,
   getGuidedOnboardingIntroPrompt,
+  getGuidedOnboardingStartPrompt,
   getGuidedOnboardingQuestion,
   formatGuidedOnboardingPrompt,
   GuidedOnboardingAnswerState,
@@ -740,12 +741,18 @@ export default function AIAgentChat({
       const shouldStartGuidedOnboarding = !guidedOnboardingActive && isGuidedOnboardingTrigger(text);
 
       if (shouldStartGuidedOnboarding) {
-        activateGuidedOnboarding();
+        const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
+        const startIndex = hasValidStoredCompanyName ? 1 : 0;
+        activateGuidedOnboarding(startIndex);
 
         setTimeout(async () => {
-          await streamChatMessage(setChatHistory, getGuidedOnboardingIntroPrompt(), {
-            onFirstChunk: () => setIsRequestInProgress(false)
-          });
+          await streamChatMessage(
+            setChatHistory,
+            getGuidedOnboardingStartPrompt(startIndex, hasValidStoredCompanyName ? registrationState.companyName : undefined),
+            {
+              onFirstChunk: () => setIsRequestInProgress(false)
+            }
+          );
         }, 350);
 
         return;
@@ -962,29 +969,34 @@ export default function AIAgentChat({
           ? 'completed'
         : workflowState.workflowStatus;
 
-      setRegistrationState(prev => ({
-        ...prev,
-        ...stabilizeWorkflowState(prev, {
-          workflowRoute: finalWorkflowRoute,
-          workflowStatus: finalWorkflowStatus,
-          workflowName: tbmsLifecycleStatus
-            ? tbmsLifecycleStatus === 'renewal_due'
-              ? 'Renewal-Vendor-Approval-Workflow'
-              : 'TCG-Vendor-Approval-Workflow'
-            : forceVendorLookup
-              ? 'TCG-Vendor-Approval-Workflow'
-            : workflowState.workflowName,
-          workflowApiPath: tbmsLifecycleStatus
-            ? tbmsLifecycleStatus === 'renewal_due'
-              ? '/api/renewal-vendor-approval-workflow'
-              : '/api/vendor-approval-workflow'
-            : forceVendorLookup
-              ? '/api/vendor-approval-workflow'
-            : workflowState.workflowApiPath,
-        }),
-        companyName: prev.companyName || vendorName || userText,
-        currentStep: 'initial'
-      }));
+      setRegistrationState(prev => {
+        const validVendorName = validateGuidedCompanyName(vendorName).valid ? vendorName : '';
+        const validUserCompanyName = validateGuidedCompanyName(userText).valid ? userText : '';
+
+        return {
+          ...prev,
+          ...stabilizeWorkflowState(prev, {
+            workflowRoute: finalWorkflowRoute,
+            workflowStatus: finalWorkflowStatus,
+            workflowName: tbmsLifecycleStatus
+              ? tbmsLifecycleStatus === 'renewal_due'
+                ? 'Renewal-Vendor-Approval-Workflow'
+                : 'TCG-Vendor-Approval-Workflow'
+              : forceVendorLookup
+                ? 'TCG-Vendor-Approval-Workflow'
+              : workflowState.workflowName,
+            workflowApiPath: tbmsLifecycleStatus
+              ? tbmsLifecycleStatus === 'renewal_due'
+                ? '/api/renewal-vendor-approval-workflow'
+                : '/api/vendor-approval-workflow'
+              : forceVendorLookup
+                ? '/api/vendor-approval-workflow'
+              : workflowState.workflowApiPath,
+          }),
+          companyName: prev.companyName || validVendorName || validUserCompanyName,
+          currentStep: 'initial'
+        };
+      });
 
       if (tbmsVendor) {
         const lifecycleStatus = tbmsLifecycleStatus || getVendorLifecycleStatus(
@@ -1226,9 +1238,9 @@ export default function AIAgentChat({
   const isAgentStreaming = chatHistory.some(message => message.sender === 'agent' && message.isPending);
   const showContactSetup = registrationState.currentStep === 'contact_info' && registrationState.workflowRoute !== 'general';
 
-  const activateGuidedOnboarding = () => {
+  const activateGuidedOnboarding = (startIndex = 0) => {
     setGuidedOnboardingActive(true);
-    setGuidedOnboardingStepIndex(0);
+    setGuidedOnboardingStepIndex(startIndex);
     setGuidedOnboardingAnswers(INITIAL_GUIDED_ONBOARDING_ANSWERS);
     setIsRequestInProgress(true);
     setConversationId(null);
@@ -1246,10 +1258,16 @@ export default function AIAgentChat({
   };
 
   const startGuidedOnboarding = () => {
-    activateGuidedOnboarding();
-    void streamChatMessage(setChatHistory, getGuidedOnboardingIntroPrompt(), {
-      onFirstChunk: () => setIsRequestInProgress(false)
-    });
+    const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
+    const startIndex = hasValidStoredCompanyName ? 1 : 0;
+    activateGuidedOnboarding(startIndex);
+    void streamChatMessage(
+      setChatHistory,
+      getGuidedOnboardingStartPrompt(startIndex, hasValidStoredCompanyName ? registrationState.companyName : undefined),
+      {
+        onFirstChunk: () => setIsRequestInProgress(false)
+      }
+    );
   };
 
   const stopGuidedOnboarding = () => {

@@ -130,6 +130,26 @@ export function getGuidedOnboardingIntroPrompt() {
   ].join('\n');
 }
 
+export function getGuidedOnboardingStartPrompt(startIndex: number, companyName?: string) {
+  const nextQuestion = getGuidedOnboardingQuestion(startIndex);
+
+  if (startIndex <= 0) {
+    return getGuidedOnboardingIntroPrompt();
+  }
+
+  const leadIn = companyName
+    ? `Great. I have recorded "${companyName.trim()}".`
+    : 'Great. I have recorded your company name.';
+
+  return [
+    GUIDED_ONBOARDING_CONFIG.intro,
+    '',
+    leadIn,
+    '',
+    nextQuestion ? formatGuidedOnboardingPrompt(nextQuestion.prompt) : formatGuidedOnboardingPrompt('Who is the contact person for this application?'),
+  ].join('\n');
+}
+
 export function getGuidedOnboardingFieldLabel(field: GuidedOnboardingField) {
   return GUIDED_ONBOARDING_CONFIG.labels[field] || 'details';
 }
