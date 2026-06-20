@@ -71,6 +71,37 @@ export const GUIDED_ONBOARDING_CONFIG = {
 const COMPANY_NAME_SUFFIX_PATTERN =
   /\b(llc|l\.l\.c|ltd|limited|company|co|corp|corporation|enterprise|group|fze|fzc|est|trading)\b/i;
 
+const COMPANY_NAME_KEYWORDS = [
+  'construction',
+  'machinery',
+  'trading',
+  'materials',
+  'services',
+  'service',
+  'engineering',
+  'center',
+  'centre',
+  'group',
+  'company',
+  'contracting',
+  'contracts',
+  'logistics',
+  'solutions',
+  'technology',
+  'technologies',
+  'industries',
+  'industrial',
+  'international',
+  'supplies',
+  'supply',
+  'general',
+  'transport',
+  'real estate',
+  'consulting',
+  'projects',
+  'equipment',
+];
+
 export function isGuidedOnboardingTrigger(text: string) {
   const normalized = text.trim();
   if (!normalized) {
@@ -123,6 +154,10 @@ export function normalizeGuidedOnboardingAnswer(field: GuidedOnboardingField, va
 export function validateGuidedCompanyName(value: string) {
   const trimmed = value.trim();
   const lower = trimmed.toLowerCase();
+  const tokens = trimmed
+    .split(/\s+/)
+    .map(token => token.replace(/[^a-z]/gi, ''))
+    .filter(Boolean);
 
   if (!trimmed) {
     return { valid: false, reason: 'Company name is required.' };
@@ -144,8 +179,20 @@ export function validateGuidedCompanyName(value: string) {
     return { valid: false, reason: 'Company name must include letters.' };
   }
 
-  if (!COMPANY_NAME_SUFFIX_PATTERN.test(trimmed) && trimmed.split(/\s+/).length < 2) {
-    return { valid: false, reason: 'Company name is too vague.' };
+  const hasCompanySuffix = COMPANY_NAME_SUFFIX_PATTERN.test(trimmed);
+  const hasKeywordMatch = COMPANY_NAME_KEYWORDS.some(keyword => lower.includes(keyword));
+  const hasMinimumStructure = tokens.length >= 2;
+  const hasBusinessSignal = hasCompanySuffix || hasKeywordMatch;
+
+  if (!hasMinimumStructure) {
+    return { valid: false, reason: 'Company name is too short.' };
+  }
+
+  if (!hasBusinessSignal) {
+    return {
+      valid: false,
+      reason: 'Please enter a business name with a company indicator such as LLC, Trading, Company, Group, Construction, Services, or Engineering.',
+    };
   }
 
   return { valid: true, reason: '' };

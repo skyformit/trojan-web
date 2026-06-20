@@ -758,18 +758,6 @@ export default function AIAgentChat({
           if (currentQuestion.field === 'companyName') {
             setIsRequestInProgress(true);
             const classification = await classifyGuidedOnboardingReply(text);
-
-            if (classification.kind !== 'company_name') {
-              setGuidedInlineError(
-                classification.kind === 'greeting'
-                  ? 'Greeting detected. Please enter the registered company name.'
-                  : 'That does not look like a company name. Please enter the registered company name.'
-              );
-              setIsRequestInProgress(false);
-              setGuidedOnboardingStepIndex(0);
-              return;
-            }
-
             const candidate = normalizeGuidedOnboardingAnswer(currentQuestion.field, classification.value || text);
             const validationError = getGuidedValidationError(currentQuestion.field, candidate);
             if (validationError) {
