@@ -162,6 +162,11 @@ export function normalizeGuidedOnboardingAnswer(field: GuidedOnboardingField, va
   }
 
   if (field === 'companyName') {
+    const labeledMatch = trimmed.match(/^(?:company\s+name|company|commercial\s+name|vendor\s+name|vendor)\s*[:\-]?\s*(.+)$/i);
+    if (labeledMatch?.[1]) {
+      return labeledMatch[1].trim();
+    }
+
     const explicitMatch = trimmed.match(/(?:my|our)\s+company\s+name\s+is\s+(.+)$/i);
     if (explicitMatch?.[1]) {
       return explicitMatch[1].trim();

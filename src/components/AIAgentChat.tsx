@@ -718,6 +718,11 @@ export default function AIAgentChat({
       return;
     }
 
+    const normalizedCompanyCandidate = normalizeGuidedOnboardingAnswer('companyName', text);
+    const directCompanyCandidate = validateGuidedCompanyName(normalizedCompanyCandidate).valid
+      ? normalizedCompanyCandidate
+      : '';
+
     const initialInputClassification =
       ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
         ? classifyInitialInput(text)
@@ -746,33 +751,27 @@ export default function AIAgentChat({
       if (
         !guidedOnboardingActive &&
         registrationState.currentStep === 'initial' &&
-        initialInputClassification.intent === 'vendor_lookup' &&
-        validateGuidedCompanyName(initialInputClassification.extracted || text).valid
+        directCompanyCandidate
       ) {
-        const candidateCompanyName = initialInputClassification.extracted || text;
-        const validation = validateGuidedCompanyName(candidateCompanyName);
+        setGuidedOnboardingActive(false);
+        setGuidedOnboardingStepIndex(-1);
+        setIsRequestInProgress(true);
+        setGuidedInlineError('');
+        setConversationId(null);
+        setVendorLookupSummary(null);
+        setRegistrationState(prev => ({
+          ...prev,
+          companyName: directCompanyCandidate,
+          currentStep: 'contact_info',
+          workflowRoute: 'general',
+          workflowStatus: 'completed',
+          workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
+          workflowApiPath: '/api/invoke-general-bot'
+        }));
 
-        if (validation.valid) {
-          setGuidedOnboardingActive(false);
-          setGuidedOnboardingStepIndex(-1);
-          setIsRequestInProgress(true);
-          setGuidedInlineError('');
-          setConversationId(null);
-          setVendorLookupSummary(null);
-          setRegistrationState(prev => ({
-            ...prev,
-            companyName: candidateCompanyName,
-            currentStep: 'contact_info',
-            workflowRoute: 'general',
-            workflowStatus: 'completed',
-            workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-            workflowApiPath: '/api/invoke-general-bot'
-          }));
+        setIsRequestInProgress(false);
 
-          setIsRequestInProgress(false);
-
-          return;
-        }
+        return;
       }
 
       const shouldStartGuidedOnboarding = !guidedOnboardingActive && isGuidedOnboardingTrigger(text);
@@ -1665,52 +1664,52 @@ export default function AIAgentChat({
       )}
 
       {/* Input Form area */}
-      <div className="p-3 bg-white border-t border-slate-200">
-        <div className="flex items-center gap-2">
-          <input
-          type="text"
-          value={inputText}
-          onChange={(e) => {
-            setInputText(e.target.value);
-            if (guidedInlineError) {
-              setGuidedInlineError('');
+      {!showContactSetup && (
+        <div className="p-3 bg-white border-t border-slate-200">
+          <div className="flex items-center gap-2">
+            <input
+            type="text"
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (guidedInlineError) {
+                setGuidedInlineError('');
+              }
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder={
+              isUploading
+                ? 'Validation in progress... please wait...'
+                : isRequestInProgress
+                  ? 'Processing request...'
+                  : guidedOnboardingActive
+                    ? 'Type your answer...'
+                    : 'Describe the supplier request to route it...'
             }
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder={
-            isUploading
-              ? 'Validation in progress... please wait...'
-              : isRequestInProgress
-                ? 'Processing request...'
-                : showContactSetup
-                  ? 'Use the contact form below...'
-                : guidedOnboardingActive
-                  ? 'Type your answer...'
-                  : 'Describe the supplier request to route it...'
-          }
-          className={`flex-1 text-xs bg-slate-50 border text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:bg-white transition ${
-            (guidedOnboardingActive && guidedInlineError) || showContactSetup
-              ? 'border-rose-300 focus:ring-rose-500'
-              : 'border-slate-200 focus:ring-indigo-500'
-          }`}
-          disabled={isUploading || isRequestInProgress || showContactSetup}
-        />
-        <button
-          onClick={() => handleSendMessage()}
-          disabled={!inputText.trim() || isUploading || isRequestInProgress || showContactSetup}
-          className="p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-        </div>
-
-        {guidedOnboardingActive && guidedInlineError && (
-          <div className="mt-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{guidedInlineError}</span>
+            className={`flex-1 text-xs bg-slate-50 border text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:bg-white transition ${
+              guidedOnboardingActive && guidedInlineError
+                ? 'border-rose-300 focus:ring-rose-500'
+                : 'border-slate-200 focus:ring-indigo-500'
+            }`}
+            disabled={isUploading || isRequestInProgress}
+          />
+          <button
+            onClick={() => handleSendMessage()}
+            disabled={!inputText.trim() || isUploading || isRequestInProgress}
+            className="p-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:hover:bg-indigo-600 transition"
+          >
+            <Send className="w-4 h-4" />
+          </button>
           </div>
-        )}
-      </div>
+
+          {guidedOnboardingActive && guidedInlineError && (
+            <div className="mt-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{guidedInlineError}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
