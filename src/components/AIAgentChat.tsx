@@ -585,6 +585,7 @@ export default function AIAgentChat({
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastConversationContextRef = useRef<GeneralBotResponse['context'] | null>(null);
   const uploadTypeForCurrentStep = getUploadTypeForStep(registrationState.currentStep);
   const effectiveUploadType = uploadTypeForCurrentStep;
 
@@ -596,6 +597,7 @@ export default function AIAgentChat({
     if (chatHistory.length === 0) {
       setConversationId(null);
       setVendorLookupSummary(null);
+      lastConversationContextRef.current = null;
     }
   }, [chatHistory.length]);
 
@@ -698,14 +700,15 @@ export default function AIAgentChat({
       const response = await fetch('/api/invoke-general-bot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: userText,
-          message: userText,
-          prompt: userText,
-          intent: forceVendorLookup ? 'vendor_lookup' : 'general_chat',
-          extracted_subject: forceVendorLookup ? classification.extracted : '',
-          conversation_id: conversationId
-        })
+      body: JSON.stringify({
+        text: userText,
+        message: userText,
+        prompt: userText,
+        intent: forceVendorLookup ? 'vendor_lookup' : 'general_chat',
+        extracted_subject: forceVendorLookup ? classification.extracted : '',
+        conversation_id: conversationId,
+        context: lastConversationContextRef.current || undefined
+      })
       });
 
       const data = (await response.json()) as GeneralBotResponse;
@@ -818,6 +821,10 @@ export default function AIAgentChat({
 
       if (data.conversation_id) {
         setConversationId(data.conversation_id);
+      }
+
+      if (data.context) {
+        lastConversationContextRef.current = data.context;
       }
 
       if (!tbmsVendor) {

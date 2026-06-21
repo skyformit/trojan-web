@@ -238,13 +238,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
     const explicitIntent = String(input?.intent || "").toLowerCase();
     const forceVendorLookup = explicitIntent === "vendor_lookup";
 
-    const payload = {
-      text: inputText,
-      message: inputText,
-      prompt: inputText,
-      input: inputText,
-      conversation_id: String(input?.conversation_id || input?.conversationId || ""),
-    };
+  const payload = {
+    text: inputText,
+    message: inputText,
+    prompt: inputText,
+    input: inputText,
+    conversation_id: String(input?.conversation_id || input?.conversationId || ""),
+    context: input?.context,
+  };
 
     const GENERAL_BOT_ENDPOINT = env.GENERAL_BOT_ENDPOINT || "";
     const TBMS_VENDOR_LOOKUP_ENDPOINT = env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
