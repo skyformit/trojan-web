@@ -12,16 +12,26 @@ type StreamOptions = {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+function sanitizeChatText(text: string) {
+  return text
+    .replace(/【\d+:\d+†source】/g, '')
+    .replace(/\[\d+:\d+\+?source\]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .trim();
+}
+
 export async function streamChatMessage(
   setChatHistory: ChatHistorySetter,
   text: string,
   options: StreamOptions = {}
 ) {
+  const sanitizedText = sanitizeChatText(text);
   const sender = options.sender ?? 'agent';
   const chunkDelayMs = options.chunkDelayMs ?? 36;
   const timestamp = options.timestamp ?? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const messageId = `${sender}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const chunks = text.match(/\S+\s*/g) ?? [text];
+  const chunks = sanitizedText.match(/\S+\s*/g) ?? [sanitizedText];
   let notifiedFirstChunk = false;
 
   setChatHistory(prev => [
@@ -61,7 +71,7 @@ export async function streamChatMessage(
   setChatHistory(prev =>
     prev.map(message =>
       message.id === messageId
-        ? { ...message, text, isPending: false }
+        ? { ...message, text: sanitizedText, isPending: false }
         : message
     )
   );
