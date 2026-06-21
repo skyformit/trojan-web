@@ -223,24 +223,39 @@ export function validateGuidedCompanyName(value: string) {
   return { valid: true, reason: '' };
 }
 
-export function normalizeGuidedPhoneNumber(value: string) {
+export function normalizeUaeMobileNumber(value: string) {
   const digits = value.replace(/\D/g, '');
-  if (digits.startsWith('971') && digits.length >= 12) {
-    return digits.slice(-9);
+  if (!digits) {
+    return '';
   }
 
-  if (digits.length > 9) {
-    return digits.slice(-9);
+  let normalized = digits;
+
+  if (normalized.startsWith('00971')) {
+    normalized = normalized.slice(5);
+  } else if (normalized.startsWith('971')) {
+    normalized = normalized.slice(3);
   }
 
-  return digits;
+  if (normalized.startsWith('0')) {
+    normalized = normalized.slice(1);
+  }
+
+  return normalized;
+}
+
+export function normalizeGuidedPhoneNumber(value: string) {
+  return normalizeUaeMobileNumber(value);
 }
 
 export function validateGuidedPhoneNumber(value: string) {
-  const normalized = normalizeGuidedPhoneNumber(value);
+  const normalized = normalizeUaeMobileNumber(value);
 
-  if (normalized.length !== 9) {
-    return { valid: false, reason: 'Mobile number must contain exactly 9 digits.' };
+  if (!/^5[1-9]\d{7}$/.test(normalized)) {
+    return {
+      valid: false,
+      reason: 'Enter a valid UAE mobile number using +971 and a 51 to 59 prefix followed by 7 digits.',
+    };
   }
 
   return { valid: true, reason: '', normalized };

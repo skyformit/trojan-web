@@ -170,6 +170,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       documentType as DocumentType,
       parsedResponse
     );
+    const tradeName = getResultValue(parsedResponse.results, ["TradeName"]);
     const fallbackReview = buildFallbackExpertReview(
       documentType as DocumentType,
       parsedResponse,
@@ -184,7 +185,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       score: parsedResponse.score ?? null,
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
-      extractedData,
+      extractedData: {
+        ...extractedData,
+        tradeName: (extractedData as Record<string, unknown>).tradeName || tradeName,
+        companyName:
+          (extractedData as Record<string, unknown>).companyName ||
+          (extractedData as Record<string, unknown>).tradeName ||
+          tradeName,
+      },
       gptReview: mergedGptReview,
       rawResponse: {
         ...parsedResponse,

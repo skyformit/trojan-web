@@ -15,6 +15,7 @@ import {
   GuidedOnboardingField,
   isGuidedOnboardingTrigger,
   normalizeGuidedOnboardingAnswer,
+  normalizeUaeMobileNumber,
   normalizeGuidedPhoneNumber,
   validateGuidedCompanyName,
   validateGuidedEmail,
@@ -71,6 +72,30 @@ type ContactValidationErrors = {
   email?: string;
   phone?: string;
 };
+
+const UAE_MOBILE_PREFIX_OPTIONS = ['51', '52', '53', '54', '55', '56', '57', '58', '59'] as const;
+
+function splitUaeMobileNumber(value: string) {
+  const normalized = normalizeUaeMobileNumber(value);
+  const prefix = normalized.slice(0, 2);
+  const localNumber = normalized.slice(2, 9);
+
+  return {
+    prefix: UAE_MOBILE_PREFIX_OPTIONS.includes(prefix as typeof UAE_MOBILE_PREFIX_OPTIONS[number])
+      ? prefix
+      : '51',
+    localNumber,
+  };
+}
+
+function composeUaeMobileNumber(prefix: string, localNumber: string) {
+  const digits = localNumber.replace(/\D/g, '').slice(0, 7);
+  if (!digits) {
+    return '';
+  }
+
+  return `+971${prefix}${digits}`;
+}
 
 type VendorLookupSummary = {
   companyName: string;
@@ -596,7 +621,7 @@ function validateContactInfo(name: string, email: string, phone: string): Contac
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
   const trimmedPhone = phone.trim();
-  const phoneDigits = trimmedPhone.replace(/\D/g, '');
+  const normalizedPhone = normalizeUaeMobileNumber(trimmedPhone);
 
   if (!trimmedName) {
     errors.name = 'Full name is required.';
@@ -610,8 +635,8 @@ function validateContactInfo(name: string, email: string, phone: string): Contac
 
   if (!trimmedPhone) {
     errors.phone = 'UAE mobile number is required.';
-  } else if (!(phoneDigits.length === 9 || (phoneDigits.length === 12 && phoneDigits.startsWith('971')))) {
-    errors.phone = 'Enter a valid UAE mobile number with 9 digits, or +971 followed by 9 digits.';
+  } else if (!/^5[1-9]\d{7}$/.test(normalizedPhone)) {
+    errors.phone = 'Enter a valid UAE mobile number using +971 and a 51 to 59 prefix followed by 7 digits.';
   }
 
   return errors;
@@ -630,6 +655,8 @@ export default function AIAgentChat({
   const [activeUploadType, setActiveUploadType] = useState<'trade_license' | 'vat_certificate' | 'bank_document' | null>('trade_license');
   const [contactValidationAttempted, setContactValidationAttempted] = useState(false);
   const [contactErrors, setContactErrors] = useState<ContactValidationErrors>({});
+  const [uaePhonePrefix, setUaePhonePrefix] = useState<'51' | '52' | '53' | '54' | '55' | '56' | '57' | '58' | '59'>('51');
+  const [uaePhoneLocalNumber, setUaePhoneLocalNumber] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
   const [guidedOnboardingActive, setGuidedOnboardingActive] = useState(false);
@@ -708,6 +735,12 @@ export default function AIAgentChat({
     registrationState.contactEmail,
     registrationState.phoneNumber
   ]);
+
+  useEffect(() => {
+    const { prefix, localNumber } = splitUaeMobileNumber(registrationState.phoneNumber);
+    setUaePhonePrefix(prefix as typeof uaePhonePrefix);
+    setUaePhoneLocalNumber(localNumber);
+  }, [registrationState.phoneNumber]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
@@ -1562,17 +1595,49 @@ export default function AIAgentChat({
                   <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                   <span>UAE Mobile Phone Number</span>
                 </label>
-                <input
-                  type="tel"
-                  placeholder="+9715XXXXXXXX"
-                  value={registrationState.phoneNumber || ''}
-                  onChange={(e) => setRegistrationState(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                  className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
-                    contactValidationAttempted && contactErrors.phone
-                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-indigo-500'
-                  }`}
-                />
+                <div className={`flex items-stretch rounded border overflow-hidden ${
+                  contactValidationAttempted && contactErrors.phone
+                    ? 'border-rose-300 bg-rose-50'
+                    : 'border-slate-200 bg-slate-50 focus-within:border-indigo-500 focus-within:bg-white'
+                }`}>
+                  <div className="flex items-center px-3 text-sm font-bold text-slate-500 border-r border-slate-200 bg-slate-100">
+                    +971
+                  </div>
+                  <select
+                    value={uaePhonePrefix}
+                    onChange={(e) => {
+                      const nextPrefix = e.target.value as typeof uaePhonePrefix;
+                      setUaePhonePrefix(nextPrefix);
+                      setRegistrationState(prev => ({
+                        ...prev,
+                        phoneNumber: composeUaeMobileNumber(nextPrefix, uaePhoneLocalNumber),
+                      }));
+                    }}
+                    className="w-24 bg-transparent px-3 py-2 text-sm font-semibold text-slate-800 outline-none border-r border-slate-200"
+                  >
+                    {UAE_MOBILE_PREFIX_OPTIONS.map(prefix => (
+                      <option key={prefix} value={prefix}>
+                        {prefix}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="7 digits"
+                    value={uaePhoneLocalNumber}
+                    maxLength={7}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 7);
+                      setUaePhoneLocalNumber(digits);
+                      setRegistrationState(prev => ({
+                        ...prev,
+                        phoneNumber: composeUaeMobileNumber(uaePhonePrefix, digits),
+                      }));
+                    }}
+                    className="flex-1 bg-transparent px-3 py-2 focus:outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
                 {contactValidationAttempted && contactErrors.phone && (
                   <p className="mt-1 text-[10px] text-rose-600 font-medium flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />

@@ -90,6 +90,56 @@ export function getResultValue(
   return "";
 }
 
+function cleanCompanyDisplayName(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/gi, " ")
+    .replace(/\bLIMITED\b/gi, " ")
+    .replace(/\bLTD\b/gi, " ")
+    .replace(/\bCORP\b/gi, " ")
+    .replace(/\bINC\b/gi, " ")
+    .replace(/\bCO\b/gi, " ")
+    .replace(/\bLLP\b/gi, " ")
+    .replace(/\bFZE\b/gi, " ")
+    .replace(/\bFZC\b/gi, " ")
+    .replace(/\bEST\b/gi, " ")
+    .trim();
+}
+
+function isLocationLikeName(value: string) {
+  const normalized = cleanCompanyDisplayName(value).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^(abu dhabi|dubai|sharjah|ajman|ra's? al khaimah|ras al khaimah|umm al quwain|fujairah|uae|united arab emirates)$/i.test(normalized)) {
+    return true;
+  }
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  return tokens.length <= 2 && !/\b(llc|l\.l\.c|ltd|limited|company|corp|corporation|enterprise|group|trading|engineering|services|service|materials|equipment|contracting|consulting|solutions|industries|international|supplies|supply)\b/i.test(normalized);
+}
+
+function getTradeLicenseCompanyName(results: AzureValidationResponse["results"]) {
+  const candidates = [
+    getResultValue(results, ["TradeName"]),
+    getResultValue(results, ["CompanyName"]),
+    getResultValue(results, ["OperatingName"]),
+    getResultValue(results, ["LegalNameEnglish"]),
+    getResultValue(results, ["BusinessName"]),
+  ];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim();
+    if (trimmed && !isLocationLikeName(trimmed)) {
+      return cleanCompanyDisplayName(trimmed);
+    }
+  }
+
+  const fallback = candidates.find(candidate => candidate.trim()) || "";
+  return cleanCompanyDisplayName(fallback);
+}
+
 export function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
   const match = fileBase64.match(/^data:([^;]+);base64,/);
   return match?.[1] || fallbackMimeType || "application/octet-stream";
@@ -157,12 +207,8 @@ export function normalizeValidationResponse(
   const validationSucceeded = payload.status === "success";
 
   if (documentType === "trade_license") {
-    const companyName = getResultValue(results, [
-      "OperatingName",
-      "BusinessName",
-      "CompanyName",
-      "LegalNameEnglish",
-    ]);
+    const tradeName = getResultValue(results, ["TradeName"]);
+    const companyName = getTradeLicenseCompanyName(results);
     const licensedActivities = getResultValue(results, [
       "LicenceActivities",
       "LicensedActivities",
@@ -174,6 +220,9 @@ export function normalizeValidationResponse(
     return {
       licenseNumber: getResultValue(results, ["LicenceNo", "LicenseNo", "LicenseNumber"]),
       companyName,
+      tradeName,
+      businessName: getResultValue(results, ["BusinessName"]),
+      legalNameEnglish: getResultValue(results, ["LegalNameEnglish"]),
       issueDate: getResultValue(results, ["IssueDate"]),
       expiryDate: getResultValue(results, ["ExpiryDate"]),
       activity: licensedActivities,
@@ -184,12 +233,8 @@ export function normalizeValidationResponse(
   }
 
   if (documentType === "vat_certificate") {
-    const companyName = getResultValue(results, [
-      "LegalNameEnglish",
-      "CompanyName",
-      "BusinessName",
-      "OperatingName",
-    ]);
+    const tradeName = getResultValue(results, ["TradeName"]);
+    const companyName = getTradeLicenseCompanyName(results);
 
     return {
       vatNumber: getResultValue(results, [
@@ -205,11 +250,13 @@ export function normalizeValidationResponse(
         "RegistrationNumber",
       ]),
       companyName,
+      tradeName,
       registrationDate: getResultValue(results, ["RegistrationDate", "IssueDate"]),
       status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
     };
   }
 
+  const tradeName = getResultValue(results, ["TradeName"]);
   return {
     bankAccountNumber: getResultValue(results, [
       "BankAccountNumber",
@@ -217,12 +264,13 @@ export function normalizeValidationResponse(
       "IBAN",
     ]),
     bankName: getResultValue(results, ["BankName", "Bank"]),
-    companyName: getResultValue(results, [
+    companyName: getTradeLicenseCompanyName(results) || getResultValue(results, [
       "AccountName",
       "CompanyName",
       "LegalNameEnglish",
       "BusinessName",
     ]),
+    tradeName,
     status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
   };
 }

@@ -22,6 +22,40 @@ import VerificationPanel from './components/VerificationPanel';
 import { streamChatMessage } from './utils/chatStream';
 import TrojanLogo from './components/TrojanLogo';
 
+function getDisplayOcrName(extracted: Record<string, any>) {
+  return (
+    extracted?.tradeName ||
+    extracted?.companyName ||
+    extracted?.legalNameEnglish ||
+    extracted?.businessName ||
+    'N/A'
+  );
+}
+
+function getDisplayTradeName(extracted: Record<string, any>) {
+  return extracted?.tradeName || 'N/A';
+}
+
+function mergeOcrExtraction(analyzeData: any) {
+  const rawResults = analyzeData?.rawResponse?.results || {};
+  const rawTradeName =
+    rawResults?.TradeName?.value ||
+    rawResults?.CompanyName?.value ||
+    rawResults?.OperatingName?.value ||
+    rawResults?.LegalNameEnglish?.value ||
+    '';
+  const rawBusinessName = rawResults?.BusinessName?.value || '';
+  const normalized = analyzeData?.extractedData || {};
+
+  return {
+    ...normalized,
+    tradeName: normalized.tradeName || rawTradeName,
+    companyName: normalized.companyName || rawTradeName || rawBusinessName,
+    businessName: normalized.businessName || rawBusinessName,
+    legalNameEnglish: normalized.legalNameEnglish || rawResults?.LegalNameEnglish?.value || '',
+  };
+}
+
 const initialRegistrationState: SupplierRegistrationState = {
   companyName: '',
   contactName: '',
@@ -123,7 +157,7 @@ export default function App() {
         throw new Error(analyzeData.message || 'Image AI scanning phase failed.');
       }
 
-      const extracted = analyzeData.extractedData;
+      const extracted = mergeOcrExtraction(analyzeData);
       console.log("OCR Extracted values:", extracted);
       const gptReview = analyzeData.gptReview || analyzeData.rawResponse?.gpt_review;
 
@@ -145,7 +179,8 @@ export default function App() {
                 ...doc.validationLogs,
                 `Clean fields successfully populated.`,
                 `Processing Time: ${analyzeData.processingTime || (typeof analyzeData.processingTimeMs === 'number' ? `${(analyzeData.processingTimeMs / 1000).toFixed(2)}s` : 'N/A')}`,
-                `Company Name matched: "${extracted.companyName || 'N/A'}"`,
+                `Trade Name parsed: "${getDisplayTradeName(extracted)}"`,
+                `Company Name matched: "${getDisplayOcrName(extracted)}"`,
                 `Identification ID parsed: "${Object.values(extracted)[0] || 'N/A'}"`,
                 `Requesting real-time validation from State Business Registrar database APIs...`
               ]
@@ -222,7 +257,7 @@ export default function App() {
 
         return {
           ...prev,
-          companyName: prev.companyName || extracted.companyName || '',
+          companyName: prev.companyName || extracted.companyName || extracted.tradeName || '',
           currentStep: nextStep,
           documents: {
             ...prev.documents,
@@ -241,14 +276,14 @@ export default function App() {
       await streamChatMessage(
         setChatHistory,
         finalStatus === 'verified'
-          ? `✦ **Automated Registry Verification Complete** ✦\n\nI have scanned your submitted **${type.replace(/_/g, ' ').toUpperCase()}**.\n\n- **OCR Scanned Name**: "${extracted.companyName || 'N/A'}"\n- **Government Match**: Verified & Fully Active (${verifyData.registeredName})\n- **Audit Status**: ✅ Compliant and cataloged.\n\n${
+          ? `✦ **Automated Registry Verification Complete** ✦\n\nI have scanned your submitted **${type.replace(/_/g, ' ').toUpperCase()}**.\n\n- **OCR Scanned Name**: "${getDisplayOcrName(extracted)}"\n- **Government Match**: Verified & Fully Active (${verifyData.registeredName})\n- **Audit Status**: ✅ Compliant and cataloged.\n\n${
               type === 'trade_license' 
                 ? "Let's move onto **Step 3**. Please provide your company's **VAT Certificate**." 
                 : type === 'vat_certificate'
                 ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)." 
                 : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
             }`
-          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **OCR Extracted Name**: "${extracted.companyName || 'N/A'}"\n- **Reason**: ${verifyData.details}\n\nOur system detected that this document is either expired, has mismatched corporate identifiers, or its numbers do not exist in our registries. Please ensure you upload a correct document.`
+          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **Trade Name**: "${getDisplayTradeName(extracted)}"\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"\n- **Reason**: ${verifyData.details}\n\nOur system detected that this document is either expired, has mismatched corporate identifiers, or its numbers do not exist in our registries. Please ensure you upload a correct document.`
       );
 
     } catch (err: any) {

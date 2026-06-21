@@ -81,6 +81,81 @@ function getResultValue(
   return "";
 }
 
+function cleanCompanyDisplayName(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/gi, " ")
+    .replace(/\bSOLE\s+PROPRIETORSHIP\b/gi, " ")
+    .replace(/\bSOLE\s+PROPRIETOR\b/gi, " ")
+    .replace(/\bPROPRIETORSHIP\b/gi, " ")
+    .replace(/\bESTABLISHMENT\b/gi, " ")
+    .replace(/\bBRANCH\b/gi, " ")
+    .replace(/\bLIMITED\b/gi, " ")
+    .replace(/\bLTD\b/gi, " ")
+    .replace(/\bCORP\b/gi, " ")
+    .replace(/\bINC\b/gi, " ")
+    .replace(/\bCO\b/gi, " ")
+    .replace(/\bLLP\b/gi, " ")
+    .replace(/\bFZE\b/gi, " ")
+    .replace(/\bFZC\b/gi, " ")
+    .replace(/\bEST\b/gi, " ")
+    .trim();
+}
+
+function isLocationLikeName(value: string) {
+  const normalized = cleanCompanyDisplayName(value).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^(abu dhabi|dubai|sharjah|ajman|ra's? al khaimah|ras al khaimah|umm al quwain|fujairah|uae|united arab emirates)$/i.test(normalized)) {
+    return true;
+  }
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  return tokens.length <= 2 && !/\b(llc|l\.l\.c|ltd|limited|company|corp|corporation|enterprise|group|trading|engineering|services|service|materials|equipment|contracting|consulting|solutions|industries|international|supplies|supply)\b/i.test(normalized);
+}
+
+function getCompanyNameForVerification(extractedFields: Record<string, string>) {
+  const candidates = [
+    extractedFields.tradeName || "",
+    extractedFields.companyName || "",
+    extractedFields.operatingName || "",
+    extractedFields.legalNameEnglish || "",
+    extractedFields.businessName || "",
+  ];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim();
+    if (trimmed && !isLocationLikeName(trimmed)) {
+      return cleanCompanyDisplayName(trimmed);
+    }
+  }
+
+  const fallback = candidates.find(candidate => candidate.trim()) || "";
+  return cleanCompanyDisplayName(fallback);
+}
+
+function getTradeLicenseCompanyName(results: AzureValidationResponse["results"]) {
+  const candidates = [
+    getResultValue(results, ["TradeName"]),
+    getResultValue(results, ["CompanyName"]),
+    getResultValue(results, ["OperatingName"]),
+    getResultValue(results, ["LegalNameEnglish"]),
+    getResultValue(results, ["BusinessName"]),
+  ];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim();
+    if (trimmed && !isLocationLikeName(trimmed)) {
+      return cleanCompanyDisplayName(trimmed);
+    }
+  }
+
+  const fallback = candidates.find(candidate => candidate.trim()) || "";
+  return cleanCompanyDisplayName(fallback);
+}
+
 function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
   const match = fileBase64.match(/^data:([^;]+);base64,/);
   return match?.[1] || fallbackMimeType || "application/octet-stream";
@@ -244,6 +319,11 @@ function normalizeCompanyName(value: string) {
   normalized = normalized.replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/g, " ");
   normalized = normalized.replace(/\bC\s*\.?\s*O\s*\.?\b/g, " ");
   normalized = normalized.replace(/\bCO\b/g, " ");
+  normalized = normalized.replace(/\bSOLE\s+PROPRIETORSHIP\b/g, " ");
+  normalized = normalized.replace(/\bSOLE\s+PROPRIETOR\b/g, " ");
+  normalized = normalized.replace(/\bPROPRIETORSHIP\b/g, " ");
+  normalized = normalized.replace(/\bESTABLISHMENT\b/g, " ");
+  normalized = normalized.replace(/\bBRANCH\b/g, " ");
   normalized = normalized.replace(/\bLIMITED\b/g, " ");
   normalized = normalized.replace(/\bLTD\b/g, " ");
   normalized = normalized.replace(/\bCORP\b/g, " ");
@@ -337,12 +417,8 @@ function normalizeValidationResponse(
   const validationSucceeded = payload.status === "success";
 
   if (documentType === "trade_license") {
-    const companyName = getResultValue(results, [
-      "OperatingName",
-      "BusinessName",
-      "CompanyName",
-      "LegalNameEnglish",
-    ]);
+    const tradeName = getResultValue(results, ["TradeName"]);
+    const companyName = getTradeLicenseCompanyName(results);
     const licensedActivities = getResultValue(results, [
       "LicenceActivities",
       "LicensedActivities",
@@ -354,6 +430,9 @@ function normalizeValidationResponse(
     return {
       licenseNumber: getResultValue(results, ["LicenceNo", "LicenseNo", "LicenseNumber"]),
       companyName,
+      tradeName,
+      businessName: getResultValue(results, ["BusinessName"]),
+      legalNameEnglish: getResultValue(results, ["LegalNameEnglish"]),
       issueDate: getResultValue(results, ["IssueDate"]),
       expiryDate: getResultValue(results, ["ExpiryDate"]),
       activity: licensedActivities,
@@ -364,12 +443,8 @@ function normalizeValidationResponse(
   }
 
   if (documentType === "vat_certificate") {
-    const companyName = getResultValue(results, [
-      "LegalNameEnglish",
-      "CompanyName",
-      "BusinessName",
-      "OperatingName",
-    ]);
+    const tradeName = getResultValue(results, ["TradeName"]);
+    const companyName = getTradeLicenseCompanyName(results);
 
     return {
       vatNumber: getResultValue(results, [
@@ -385,11 +460,13 @@ function normalizeValidationResponse(
         "RegistrationNumber",
       ]),
       companyName,
+      tradeName,
       registrationDate: getResultValue(results, ["RegistrationDate", "IssueDate"]),
       status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
     };
   }
 
+  const tradeName = getResultValue(results, ["TradeName"]);
   return {
     bankAccountNumber: getResultValue(results, [
       "BankAccountNumber",
@@ -397,12 +474,13 @@ function normalizeValidationResponse(
       "IBAN",
     ]),
     bankName: getResultValue(results, ["BankName", "Bank"]),
-    companyName: getResultValue(results, [
+    companyName: getTradeLicenseCompanyName(results) || getResultValue(results, [
       "AccountName",
       "CompanyName",
       "LegalNameEnglish",
       "BusinessName",
     ]),
+    tradeName,
     status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
   };
 }
@@ -607,6 +685,12 @@ app.post("/api/analyze-document", async (req, res) => {
 
     const processingTimeMs = Math.round(performance.now() - startedAt);
 
+    const extractedData = normalizeValidationResponse(
+      documentType as DocumentType,
+      parsedResponse
+    );
+    const tradeName = getResultValue(parsedResponse.results, ["TradeName"]);
+
     return res.json({
       status: "success",
       ocrSource: validationConfig.ocrSource,
@@ -614,10 +698,11 @@ app.post("/api/analyze-document", async (req, res) => {
       score: parsedResponse.score ?? null,
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
-      extractedData: normalizeValidationResponse(
-        documentType as DocumentType,
-        parsedResponse
-      ),
+      extractedData: {
+        ...extractedData,
+        tradeName: extractedData.tradeName || tradeName,
+        companyName: extractedData.companyName || extractedData.tradeName || tradeName,
+      },
       rawResponse: parsedResponse,
     });
   } catch (error: any) {
@@ -649,7 +734,7 @@ app.post("/api/verify-government", (req, res) => {
         extractedFields.activity ||
         ""
       ).trim();
-      const companyName = (extractedFields.companyName || "Verified Trade License").trim();
+      const companyName = getCompanyNameForVerification(extractedFields);
       const companyNameMatches = companyNamesMatch(normalizedEnteredCompanyName, companyName);
       const isActive =
         companyNameMatches &&
@@ -684,7 +769,7 @@ app.post("/api/verify-government", (req, res) => {
         details: !normalizedEnteredCompanyName
           ? "Entered company name is missing. Please provide the company name from the chat."
           : !companyNameMatches
-            ? `Company name mismatch after normalization. Entered: "${enteredCompanyName}". OCR: "${companyName}".`
+            ? `Company name mismatch after normalization. Entered: "${enteredCompanyName}". OCR: "${companyName || 'not extracted'}".`
             : !licenseNumber || !expiryDate || !licensedActivities
               ? "Trade license is missing required OCR fields. Please review license number, expiry date, and licensed activities."
               : `Trade license expired on ${expiryDate}. Please upload a valid license with a future expiry date.`,

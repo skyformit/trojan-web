@@ -26,6 +26,11 @@ export default function VerificationPanel({
     normalized = normalized.replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/g, ' ');
     normalized = normalized.replace(/\bC\s*\.?\s*O\s*\.?\b/g, ' ');
     normalized = normalized.replace(/\bCO\b/g, ' ');
+    normalized = normalized.replace(/\bSOLE\s+PROPRIETORSHIP\b/g, ' ');
+    normalized = normalized.replace(/\bSOLE\s+PROPRIETOR\b/g, ' ');
+    normalized = normalized.replace(/\bPROPRIETORSHIP\b/g, ' ');
+    normalized = normalized.replace(/\bESTABLISHMENT\b/g, ' ');
+    normalized = normalized.replace(/\bBRANCH\b/g, ' ');
     normalized = normalized.replace(/\bLIMITED\b/g, ' ');
     normalized = normalized.replace(/\bLTD\b/g, ' ');
     normalized = normalized.replace(/\bCORP\b/g, ' ');
@@ -105,6 +110,7 @@ export default function VerificationPanel({
     if (doc.type === 'bank_document') {
       return (
         doc.extractedData?.companyName ||
+        doc.extractedData?.tradeName ||
         doc.extractedData?.bankName ||
         doc.extractedData?.bankAccountNumber ||
         'N/A'
@@ -116,6 +122,7 @@ export default function VerificationPanel({
         doc.extractedData?.taxRegistrationNumber ||
         doc.extractedData?.vatNumber ||
         doc.extractedData?.companyName ||
+        doc.extractedData?.tradeName ||
         'N/A'
       );
     }
@@ -123,6 +130,7 @@ export default function VerificationPanel({
     return (
       doc.extractedData?.licenseNumber ||
       doc.extractedData?.companyName ||
+      doc.extractedData?.tradeName ||
       'N/A'
     );
   };
@@ -177,9 +185,9 @@ export default function VerificationPanel({
   const getDocumentDiscrepancyCheck = () => {
     const findings: string[] = [];
     
-    const tradeName = trade_license.extractedData?.companyName;
-    const vatName = vat_certificate.extractedData?.companyName;
-    const bankDocName = bank_document.extractedData?.companyName;
+    const tradeName = trade_license.extractedData?.tradeName || trade_license.extractedData?.companyName;
+    const vatName = vat_certificate.extractedData?.companyName || vat_certificate.extractedData?.tradeName;
+    const bankDocName = bank_document.extractedData?.companyName || bank_document.extractedData?.tradeName;
 
     if (tradeName && vatName && !companyNamesMatch(tradeName, vatName)) {
       findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match VAT Corporate Name ("${vatName}")`);
@@ -315,6 +323,11 @@ export default function VerificationPanel({
                             : `Trade License No: ${getDocumentSummaryValue(doc)}`
                         : 'Not provided yet'}
                     </p>
+                    {doc.type === 'trade_license' && doc.extractedData?.tradeName && (
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        Trade Name: {doc.extractedData.tradeName}
+                      </p>
+                    )}
                     {doc.processingTime && (
                       <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider mt-0.5">
                         Processing time: {doc.processingTime}
