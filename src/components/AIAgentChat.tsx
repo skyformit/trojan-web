@@ -1168,16 +1168,33 @@ export default function AIAgentChat({
 
       await streamChatMessage(
         setChatHistory,
-        `✦ **Contact Details Registered** ✦\n\n- **Recipient Name**: "${cName}"\n- **Notification Channels**: Email (${cEmail}) & SMS (${cPhone})\n\nNow, let's verify your company's credentials.\n\nPlease upload or drop your **Valid Trade License** (PDF) to proceed.`
+        `✦ **Contact Details Registered** ✦
+
+**Recipient Name**
+${cName}
+
+**Notification Channels**
+• Email: ${cEmail}
+• SMS: ${cPhone}
+
+**Next Step**
+Please upload or drop your **Valid Trade License** (PDF) to proceed.
+
+We will verify your company's credentials after the upload.`
       );
     }, 850);
   };
 
   // Upload actions orchestration
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+    const input = e.currentTarget;
+    const files = input.files;
     if (!files || files.length === 0 || !uploadTypeForCurrentStep) return;
-    await processFileUpload(files[0], uploadTypeForCurrentStep);
+
+    const selectedFile = files[0];
+    // Clear the input immediately so selecting the same file again triggers onChange.
+    input.value = '';
+    await processFileUpload(selectedFile, uploadTypeForCurrentStep);
   };
 
   const processFileUpload = async (file: File, type: 'trade_license' | 'vat_certificate' | 'bank_document') => {

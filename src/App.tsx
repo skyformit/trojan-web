@@ -223,7 +223,7 @@ export default function App() {
             uploadedAt: new Date().toLocaleTimeString(),
             validationLogs: [
               `Kickoff audit protocol: OCR visual analysis matching.`,
-              `Triggering Gemini AI (gemini-3.5-flash) visual metadata scanner...`
+              `Triggering OCR visual metadata scanner...`
             ]
           }
         }
@@ -231,7 +231,7 @@ export default function App() {
     });
 
     try {
-      // 2. Call the Express backend to run Gemini OCR extraction
+      // 2. Call the Express backend to run OCR extraction
       const analyzeRes = await fetch('/api/analyze-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -452,8 +452,8 @@ export default function App() {
                 : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
             }`
           : effectiveFinalStatus === 'review'
-            ? `⚠ **Document Sent for Review** ⚠\n\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"${missingFieldLabels.length > 0 ? `\n- **Missing Fields**: ${missingFieldLabels.join(', ')}` : ''}\n\nYour document is under review based on the backend acceptance rules.`
-            : `⚠ **Document Rejected** ⚠\n\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"${missingFieldLabels.length > 0 ? `\n- **Missing Fields**: ${missingFieldLabels.join(', ')}` : ''}\n${bankQrRequired ? `- **Missing Fields**: QR Code\n` : ''}${!companyNameAligned ? `- **Company Name Mismatch**: ${companyMismatchReason}\n` : ''}\nPlease upload a corrected document that satisfies the backend acceptance rules.`
+            ? `⚠ **Document Sent for Review**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Status**\nYour document is currently under expert review.\n\n**Next Step**\nWe will continue once the acceptance rules are resolved.`
+            : `⚠ **Document Rejected**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Why it was flagged**\n${!companyNameAligned ? `• ${companyMismatchReason}` : '• The document did not satisfy the required validation checks.'}\n\n**Next Step**\nPlease upload a corrected document to continue.`
       );
 
     } catch (err: any) {
@@ -526,7 +526,7 @@ export default function App() {
     {
       id: 2,
       label: 'Verification',
-      desc: 'Gemini OCR Audits',
+      desc: 'OCR Validation',
       icon: (active: boolean, done: boolean) => <Building2 className="w-4 h-4" />
     },
     {

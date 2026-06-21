@@ -187,7 +187,6 @@ export default function VerificationPanel({
                     {doc.documentAcceptance?.status && (
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">
                         Acceptance: {doc.documentAcceptance.status}
-                        {doc.documentAcceptance.missing_fields?.length ? ` · Missing: ${formatMissingFieldLabels(doc.documentAcceptance.missing_fields).join(', ')}` : ''}
                       </p>
                     )}
                     {doc.processingTime && (
@@ -470,7 +469,7 @@ export default function VerificationPanel({
           <div className="space-y-4">
             {/* Scanned/Extracted details */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded">
-              <h5 className="text-[9px] uppercase font-bold text-slate-400 mb-3 tracking-widest">Extracted Fields via Gemini OCR</h5>
+              <h5 className="text-[9px] uppercase font-bold text-slate-400 mb-3 tracking-widest">Extracted Fields via OCR</h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {fieldsDef.map((def) => (
                   <div key={def.key} className="border-b border-slate-200 pb-1.5">
@@ -536,12 +535,6 @@ export default function VerificationPanel({
                       {doc.documentAcceptance.is_expired ? 'Yes' : 'No'}
                     </span>
                   </div>
-                </div>
-                <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Missing Mandatory Fields</span>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    {doc.documentAcceptance.missing_fields?.length ? formatMissingFieldLabels(doc.documentAcceptance.missing_fields).join(', ') : 'None'}
-                  </p>
                 </div>
                 {doc.documentAcceptance.reasons?.length ? (
                   <div className="rounded border border-slate-200 bg-slate-50 p-3">
