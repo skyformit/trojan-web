@@ -36,23 +36,114 @@ function getDisplayTradeName(extracted: Record<string, any>) {
   return extracted?.tradeName || 'N/A';
 }
 
-function mergeOcrExtraction(analyzeData: any) {
-  const rawResults = analyzeData?.rawResponse?.results || {};
-  const rawTradeName =
-    rawResults?.TradeName?.value ||
-    rawResults?.CompanyName?.value ||
-    rawResults?.OperatingName?.value ||
-    rawResults?.LegalNameEnglish?.value ||
-    '';
-  const rawBusinessName = rawResults?.BusinessName?.value || '';
+function getResultValue(results: Record<string, { value?: string }>, keys: string[]) {
+  for (const key of keys) {
+    const value = results?.[key]?.value?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function formatMissingFieldLabel(field: string) {
+  const normalized = field.trim().toLowerCase();
+  const labelMap: Record<string, string> = {
+    trade_name: 'Trade Name',
+    expiry_date: 'Expiry Date',
+    licensed_activities: 'Licensed Activities',
+    vat_number: 'VAT Number',
+    company_name: 'Company Name',
+    bank_name: 'Bank Name',
+    license_number: 'License Number',
+    tax_number: 'Tax Number',
+    account_number: 'Account Number',
+    bank_account_number: 'Bank Account Number',
+    qr_code: 'QR Code',
+  };
+
+  return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function formatMissingFieldLabels(fields: string[]) {
+  return fields.map(formatMissingFieldLabel);
+}
+
+function normalizeCompanyName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\(\)\[\],.;\-_/]/g, ' ')
+    .replace(/\b(l\s*\.?\s*l\s*\.?\s*c|llc|ltd|limited|corp|corporation|co|company|sole\s+proprietorship|proprietorship|establishment|branch|inc)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function companyNamesMatch(left: string, right: string) {
+  const normalizedLeft = normalizeCompanyName(left);
+  const normalizedRight = normalizeCompanyName(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
+  const rawResults = analyzeData?.results || analyzeData?.rawResponse?.results || {};
   const normalized = analyzeData?.extractedData || {};
+  const tradeName = getResultValue(rawResults, ['TradeName', 'CompanyName', 'OperatingName', 'LegalNameEnglish', 'BusinessName']);
+  const companyName = tradeName || normalized.companyName || normalized.tradeName || '';
+
+  if (documentType === 'vat_certificate') {
+    const vatNumber = getResultValue(rawResults, [
+      'UnifiedRegistrationNo',
+      'UnifiedLicenceNo',
+      'VATNumber',
+      'VatNumber',
+      'TaxRegistrationNumber',
+      'RegistrationNumber'
+    ]);
+
+    return {
+      ...normalized,
+      tradeName,
+      companyName,
+      vatNumber: normalized.vatNumber || vatNumber,
+      taxRegistrationNumber: normalized.taxRegistrationNumber || vatNumber,
+      issueDate: normalized.issueDate || getResultValue(rawResults, ['IssueDate', 'RegistrationDate']),
+      expiryDate: normalized.expiryDate || getResultValue(rawResults, ['ExpiryDate']),
+      activity: normalized.activity || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
+      licensedActivities: normalized.licensedActivities || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
+      officialEmail: getResultValue(rawResults, ['OfficialEmail']),
+      officialMobile: getResultValue(rawResults, ['OfficialMobile']),
+    };
+  }
+
+  if (documentType === 'bank_document') {
+    return {
+      ...normalized,
+      tradeName: normalized.tradeName || tradeName,
+      companyName: normalized.companyName || tradeName,
+      bankAccountNumber: normalized.bankAccountNumber || getResultValue(rawResults, ['BankAccountNumber', 'AccountNumber', 'IBAN']),
+      bankName: normalized.bankName || getResultValue(rawResults, ['BankName', 'Bank']),
+      iban: normalized.iban || getResultValue(rawResults, ['IBAN']),
+      accountName: normalized.accountName || getResultValue(rawResults, ['AccountName']),
+    };
+  }
 
   return {
     ...normalized,
-    tradeName: normalized.tradeName || rawTradeName,
-    companyName: normalized.companyName || rawTradeName || rawBusinessName,
-    businessName: normalized.businessName || rawBusinessName,
-    legalNameEnglish: normalized.legalNameEnglish || rawResults?.LegalNameEnglish?.value || '',
+    tradeName: normalized.tradeName || tradeName,
+    companyName: normalized.companyName || tradeName,
+    businessName: normalized.businessName || getResultValue(rawResults, ['BusinessName']),
+    legalNameEnglish: normalized.legalNameEnglish || getResultValue(rawResults, ['LegalNameEnglish']),
+    licenseNumber:
+      normalized.licenseNumber ||
+      getResultValue(rawResults, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']),
+    issueDate: normalized.issueDate || getResultValue(rawResults, ['IssueDate']),
+    expiryDate: normalized.expiryDate || getResultValue(rawResults, ['ExpiryDate']),
+    activity: normalized.activity || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
+    licensedActivities: normalized.licensedActivities || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
+    manager: normalized.manager || getResultValue(rawResults, ['Manager', 'AuthorizedSignatory']),
+    officialEmail: getResultValue(rawResults, ['OfficialEmail']),
+    officialMobile: getResultValue(rawResults, ['OfficialMobile']),
   };
 }
 
@@ -157,9 +248,71 @@ export default function App() {
         throw new Error(analyzeData.message || 'Image AI scanning phase failed.');
       }
 
-      const extracted = mergeOcrExtraction(analyzeData);
+      const extracted = mergeOcrExtraction(analyzeData, type);
       console.log("OCR Extracted values:", extracted);
-      const gptReview = analyzeData.gptReview || analyzeData.rawResponse?.gpt_review;
+      const documentAcceptance = analyzeData.documentAcceptance || analyzeData.rawResponse?.document_acceptance || null;
+      const ocrResults = analyzeData.results || analyzeData.rawResponse?.results || {};
+      const qrCodes = Array.isArray(analyzeData.rawResponse?.qr_codes?.value)
+        ? analyzeData.rawResponse.qr_codes.value
+        : Array.isArray(analyzeData.qr_codes?.value)
+          ? analyzeData.qr_codes.value
+          : [];
+      const enteredCompanyName = registrationState.companyName || '';
+      const extractedCompanyName = getDisplayOcrName(extracted);
+      const companyNameAligned =
+        !enteredCompanyName ||
+        !extractedCompanyName ||
+        companyNamesMatch(enteredCompanyName, extractedCompanyName);
+      const companyMismatchReason = !companyNameAligned
+        ? `Company name mismatch. Entered: "${enteredCompanyName}". OCR: "${extractedCompanyName}".`
+        : '';
+      const acceptanceStatus = String(documentAcceptance?.status || (documentAcceptance?.acceptable ? 'approved' : '')).toLowerCase();
+      const missingFields = Array.isArray(documentAcceptance?.missing_fields)
+        ? documentAcceptance.missing_fields
+        : [];
+      const missingFieldLabels = formatMissingFieldLabels(missingFields);
+      const decisionLabel =
+        companyNameAligned && acceptanceStatus === 'approved'
+          ? 'APPROVED'
+          : companyNameAligned && acceptanceStatus === 'review'
+            ? 'REVIEW'
+            : 'REJECTED';
+      const effectiveDocumentAcceptance = companyNameAligned
+        ? documentAcceptance
+        : {
+            ...(documentAcceptance || {}),
+            status: 'rejected',
+            acceptable: false,
+            reasons: [
+              ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
+              companyMismatchReason,
+            ].filter(Boolean),
+          };
+      const bankQrRequired = type === 'bank_document' && qrCodes.length === 0;
+      const bankQrReason = 'QR code is required for bank documents.';
+      const qrEnforcedDocumentAcceptance = bankQrRequired
+        ? {
+            ...(effectiveDocumentAcceptance || {}),
+            status: 'rejected',
+            acceptable: false,
+            missing_fields: Array.from(new Set([
+              ...((effectiveDocumentAcceptance as any)?.missing_fields || []),
+              'qr_code',
+            ])),
+            reasons: [
+              ...((effectiveDocumentAcceptance as any)?.reasons || []),
+              bankQrReason,
+            ].filter(Boolean),
+          }
+        : effectiveDocumentAcceptance;
+      const effectiveFinalStatus: DocumentVerification['status'] =
+        bankQrRequired
+          ? 'failed'
+          : companyNameAligned && acceptanceStatus === 'approved'
+            ? 'verified'
+            : companyNameAligned && acceptanceStatus === 'review'
+              ? 'review'
+              : 'failed';
 
       // 3. Mark OCR success and prompt the registry check starting
       setRegistrationState(prev => {
@@ -172,7 +325,8 @@ export default function App() {
               ...doc,
               status: 'ocr_completed',
               extractedData: extracted,
-              gptReview,
+              ocrResults,
+              documentAcceptance: qrEnforcedDocumentAcceptance,
               processingTimeMs: analyzeData.processingTimeMs,
               processingTime: analyzeData.processingTime,
               validationLogs: [
@@ -182,7 +336,12 @@ export default function App() {
                 `Trade Name parsed: "${getDisplayTradeName(extracted)}"`,
                 `Company Name matched: "${getDisplayOcrName(extracted)}"`,
                 `Identification ID parsed: "${Object.values(extracted)[0] || 'N/A'}"`,
-                `Requesting real-time validation from State Business Registrar database APIs...`
+                `Acceptance Decision: ${decisionLabel}`,
+                !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
+                missingFieldLabels.length > 0 ? `Missing mandatory fields: ${missingFieldLabels.join(', ')}` : 'No mandatory fields missing.',
+                ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
+                  ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
+                  : [])
               ]
             }
           }
@@ -192,64 +351,71 @@ export default function App() {
       // Quick visual delay transition to registry verification
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      setRegistrationState(prev => {
-        const doc = prev.documents[type];
-        return {
-          ...prev,
-          documents: {
-            ...prev.documents,
-            [type]: {
-              ...doc,
-              status: 'registry_check'
+      if (effectiveFinalStatus === 'review') {
+        setRegistrationState(prev => {
+          const doc = prev.documents[type];
+          return {
+            ...prev,
+            documents: {
+              ...prev.documents,
+              [type]: {
+                ...doc,
+                status: 'review',
+              }
             }
-          }
-        };
-      });
-
-      // 4. Query Government verification database
-      const verifyRes = await fetch('/api/verify-government', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentType: type,
-          extractedFields: extracted,
-          enteredCompanyName: registrationState.companyName
-        })
-      });
-
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok || verifyData.status !== 'success') {
-        throw new Error(verifyData.message || 'Registry verification connection timeout.');
+          };
+        });
+      } else {
+        setRegistrationState(prev => {
+          const doc = prev.documents[type];
+          return {
+            ...prev,
+            documents: {
+              ...prev.documents,
+              [type]: {
+                ...doc,
+                status: effectiveFinalStatus,
+              }
+            }
+          };
+        });
       }
 
-      // 5. Update complete document status and push audit reports
-      const finalStatus = verifyData.matched && verifyData.registryStatus === 'ACTIVE' ? 'verified' : 'failed';
-      
       setRegistrationState(prev => {
         const doc = prev.documents[type];
         const updatedDoc: DocumentVerification = {
           ...doc,
-          status: finalStatus,
+          status: effectiveFinalStatus,
           registryMatch: {
-            matched: verifyData.matched,
-            registeredName: verifyData.registeredName,
-            status: verifyData.registryStatus,
-            details: verifyData.details
+            matched: effectiveFinalStatus === 'verified',
+            registeredName: getDisplayOcrName(extracted),
+            status: effectiveFinalStatus === 'verified' ? 'ACTIVE' : 'NOT_FOUND',
+            details: qrEnforcedDocumentAcceptance
+              ? `Document acceptance status: ${decisionLabel}.`
+              : 'Document acceptance response unavailable.',
           },
+          documentAcceptance: qrEnforcedDocumentAcceptance,
           validationLogs: [
             ...doc.validationLogs,
-            `Database Lookup Result: ${verifyData.matched ? 'MATCHED' : 'NOT FOUND'}`,
-            `Government Account Status: ${verifyData.registryStatus}`,
-            `Validation Logs: ${verifyData.details}`,
-            finalStatus === 'verified' 
-              ? `Compliance Checklist APPROVED.` 
-              : `Compliance Alert: Verification failed. Key data mismatched with public indices.`
+            `Document Acceptance Decision: ${decisionLabel}`,
+            qrEnforcedDocumentAcceptance?.document_type ? `Document Type: ${qrEnforcedDocumentAcceptance.document_type}` : 'Document Type: N/A',
+            !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
+            bankQrRequired ? `QR code is missing for bank document.` : 'QR code check passed.',
+            missingFieldLabels.length > 0 ? `Missing mandatory fields: ${missingFieldLabels.join(', ')}` : 'Missing mandatory fields: none',
+            ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
+              ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
+              : []),
+            effectiveFinalStatus === 'verified'
+              ? 'Compliance Checklist APPROVED.'
+              : effectiveFinalStatus === 'review'
+                ? 'Compliance Status: REVIEW REQUIRED.'
+                : 'Compliance Alert: Document rejected by backend acceptance rules.'
           ]
         };
 
         // Determine next sequence stage
         let nextStep = prev.currentStep;
-        if (finalStatus === 'verified') {
+        if (effectiveFinalStatus === 'verified') {
           if (type === 'trade_license') nextStep = 'vat_upload';
           else if (type === 'vat_certificate') nextStep = 'bank_document_upload';
           else if (type === 'bank_document') nextStep = 'review';
@@ -258,6 +424,8 @@ export default function App() {
         return {
           ...prev,
           companyName: prev.companyName || extracted.companyName || extracted.tradeName || '',
+          tradeLicenseNumber: prev.tradeLicenseNumber || extracted.licenseNumber || '',
+          vatNumber: prev.vatNumber || extracted.taxRegistrationNumber || extracted.vatNumber || '',
           currentStep: nextStep,
           documents: {
             ...prev.documents,
@@ -265,9 +433,9 @@ export default function App() {
           },
           registryChecks: {
             ...prev.registryChecks,
-            tradeLicenseVerified: type === 'trade_license' ? finalStatus === 'verified' : prev.registryChecks.tradeLicenseVerified,
-            vatVerified: type === 'vat_certificate' ? finalStatus === 'verified' : prev.registryChecks.vatVerified,
-            bankDocumentVerified: type === 'bank_document' ? finalStatus === 'verified' : prev.registryChecks.bankDocumentVerified
+            tradeLicenseVerified: type === 'trade_license' ? effectiveFinalStatus === 'verified' : prev.registryChecks.tradeLicenseVerified,
+            vatVerified: type === 'vat_certificate' ? effectiveFinalStatus === 'verified' : prev.registryChecks.vatVerified,
+            bankDocumentVerified: type === 'bank_document' ? effectiveFinalStatus === 'verified' : prev.registryChecks.bankDocumentVerified
           }
         };
       });
@@ -275,15 +443,17 @@ export default function App() {
       // 6. Write explanation of compliance checks outcome into chatbot history
       await streamChatMessage(
         setChatHistory,
-        finalStatus === 'verified'
-          ? `✦ **Automated Registry Verification Complete** ✦\n\nI have scanned your submitted **${type.replace(/_/g, ' ').toUpperCase()}**.\n\n- **OCR Scanned Name**: "${getDisplayOcrName(extracted)}"\n- **Government Match**: Verified & Fully Active (${verifyData.registeredName})\n- **Audit Status**: ✅ Compliant and cataloged.\n\n${
-              type === 'trade_license' 
-                ? "Let's move onto **Step 3**. Please provide your company's **VAT Certificate**." 
+        effectiveFinalStatus === 'verified'
+          ? `✦ **Document Accepted** ✦\n\nI have scanned your submitted **${type.replace(/_/g, ' ').toUpperCase()}**.\n\n- **OCR Scanned Name**: "${getDisplayOcrName(extracted)}"\n- **Acceptance Status**: ✅ Approved by Expert Intelligent rules.\n\n${
+              type === 'trade_license'
+                ? "Let's move onto **Step 3**. Please provide your company's **VAT Certificate**."
                 : type === 'vat_certificate'
-                ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)." 
+                ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)."
                 : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
             }`
-          : `⚠ **Compliance Alert: Document Verification Failed** ⚠\n\n- **Trade Name**: "${getDisplayTradeName(extracted)}"\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"\n- **Reason**: ${verifyData.details}\n\nOur system detected that this document is either expired, has mismatched corporate identifiers, or its numbers do not exist in our registries. Please ensure you upload a correct document.`
+          : effectiveFinalStatus === 'review'
+            ? `⚠ **Document Sent for Review** ⚠\n\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"${missingFieldLabels.length > 0 ? `\n- **Missing Fields**: ${missingFieldLabels.join(', ')}` : ''}\n\nYour document is under review based on the backend acceptance rules.`
+            : `⚠ **Document Rejected** ⚠\n\n- **OCR Extracted Name**: "${getDisplayOcrName(extracted)}"${missingFieldLabels.length > 0 ? `\n- **Missing Fields**: ${missingFieldLabels.join(', ')}` : ''}\n${bankQrRequired ? `- **Missing Fields**: QR Code\n` : ''}${!companyNameAligned ? `- **Company Name Mismatch**: ${companyMismatchReason}\n` : ''}\nPlease upload a corrected document that satisfies the backend acceptance rules.`
       );
 
     } catch (err: any) {

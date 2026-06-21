@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, FileText, AlertTriangle, CheckSquare, Clock, Globe, ArrowRight, Save, Database, UserCheck } from 'lucide-react';
+import { ShieldCheck, FileText, CheckSquare, Clock, Globe, ArrowRight, Save, Database, UserCheck } from 'lucide-react';
 import { SupplierRegistrationState, DocumentVerification } from '../types';
 
 interface VerificationPanelProps {
@@ -16,95 +16,25 @@ export default function VerificationPanel({
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
 
-  const normalizeCompanyName = (value?: string) => {
-    if (!value) {
-      return '';
-    }
+  const formatMissingFieldLabel = (field: string) => {
+    const normalized = field.trim().toLowerCase();
+    const labelMap: Record<string, string> = {
+      trade_name: 'Trade Name',
+      expiry_date: 'Expiry Date',
+      licensed_activities: 'Licensed Activities',
+      vat_number: 'VAT Number',
+      company_name: 'Company Name',
+      bank_name: 'Bank Name',
+      license_number: 'License Number',
+      tax_number: 'Tax Number',
+      account_number: 'Account Number',
+      bank_account_number: 'Bank Account Number',
+    };
 
-    let normalized = value.toUpperCase();
-    normalized = normalized.replace(/[\(\)\[\],.;\-_/]/g, ' ');
-    normalized = normalized.replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/g, ' ');
-    normalized = normalized.replace(/\bC\s*\.?\s*O\s*\.?\b/g, ' ');
-    normalized = normalized.replace(/\bCO\b/g, ' ');
-    normalized = normalized.replace(/\bSOLE\s+PROPRIETORSHIP\b/g, ' ');
-    normalized = normalized.replace(/\bSOLE\s+PROPRIETOR\b/g, ' ');
-    normalized = normalized.replace(/\bPROPRIETORSHIP\b/g, ' ');
-    normalized = normalized.replace(/\bESTABLISHMENT\b/g, ' ');
-    normalized = normalized.replace(/\bBRANCH\b/g, ' ');
-    normalized = normalized.replace(/\bLIMITED\b/g, ' ');
-    normalized = normalized.replace(/\bLTD\b/g, ' ');
-    normalized = normalized.replace(/\bCORP\b/g, ' ');
-    normalized = normalized.replace(/\bINC\b/g, ' ');
-    normalized = normalized.replace(/\s+/g, ' ').trim();
-
-    const tokens = normalized.split(' ');
-    for (let size = Math.floor(tokens.length / 2); size >= 1; size -= 1) {
-      if (tokens.length % size !== 0) {
-        continue;
-      }
-
-      const reference = tokens.slice(0, size).join(' ');
-      let repeated = true;
-      for (let index = size; index < tokens.length; index += size) {
-        const candidate = tokens.slice(index, index + size).join(' ');
-        if (candidate !== reference) {
-          repeated = false;
-          break;
-        }
-      }
-
-      if (repeated) {
-        return reference;
-      }
-    }
-
-    return normalized;
+    return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
   };
 
-  const companyNamesMatch = (left?: string, right?: string) => {
-    const normalizedLeft = normalizeCompanyName(left);
-    const normalizedRight = normalizeCompanyName(right);
-    return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
-  };
-
-  const parseTradeLicenseDate = (value?: string) => {
-    if (!value) {
-      return null;
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
-    if (isoMatch) {
-      return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00Z`);
-    }
-
-    const dayFirstMatch = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-    if (dayFirstMatch) {
-      const day = Number(dayFirstMatch[1]);
-      const month = Number(dayFirstMatch[2]);
-      const year = Number(dayFirstMatch[3]);
-      return new Date(Date.UTC(year, month - 1, day));
-    }
-
-    const textualMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
-    if (textualMatch) {
-      const parsed = new Date(`${textualMatch[1]} ${textualMatch[2]} ${textualMatch[3]}`);
-      if (!Number.isNaN(parsed.getTime())) {
-        return parsed;
-      }
-    }
-
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed;
-    }
-
-    return null;
-  };
+  const formatMissingFieldLabels = (fields?: string[]) => (fields || []).map(formatMissingFieldLabel);
 
   const getDocumentSummaryValue = (doc: DocumentVerification) => {
     if (doc.type === 'bank_document') {
@@ -135,82 +65,6 @@ export default function VerificationPanel({
     );
   };
 
-  const getGptReviewSentiment = (doc: DocumentVerification) => {
-    const review = doc.gptReview;
-    if (!review) {
-      return {
-        label: 'Not available',
-        subtitle: 'No GPT review data',
-        classes: 'text-slate-600 bg-slate-100 border-slate-200',
-        subtitleClass: 'text-slate-500'
-      };
-    }
-
-    if (review.isConsistent && review.plausibility_score >= 0.85) {
-      return {
-        label: 'Likely valid',
-        subtitle: 'High confidence OCR',
-        classes: 'text-emerald-700 bg-emerald-100 border-emerald-200',
-        subtitleClass: 'text-emerald-700'
-      };
-    }
-
-    if (!review.isConsistent && review.plausibility_score < 0.35) {
-      return {
-        label: 'Tampering suspected',
-        subtitle: 'Conflicting / low-trust data',
-        classes: 'text-rose-700 bg-rose-100 border-rose-200',
-        subtitleClass: 'text-rose-700'
-      };
-    }
-
-    if (!review.isConsistent || review.plausibility_score < 0.7) {
-      return {
-        label: 'Needs review',
-        subtitle: 'Manual verification recommended',
-        classes: 'text-amber-700 bg-amber-100 border-amber-200',
-        subtitleClass: 'text-amber-700'
-      };
-    }
-
-    return {
-      label: 'High risk',
-      subtitle: 'Potential extraction errors',
-      classes: 'text-orange-700 bg-orange-100 border-orange-200',
-      subtitleClass: 'text-orange-700'
-    };
-  };
-
-  // Perform cross-document validation to make sure naming is fully aligned
-  const getDocumentDiscrepancyCheck = () => {
-    const findings: string[] = [];
-    
-    const tradeName = trade_license.extractedData?.tradeName || trade_license.extractedData?.companyName;
-    const vatName = vat_certificate.extractedData?.companyName || vat_certificate.extractedData?.tradeName;
-    const bankDocName = bank_document.extractedData?.companyName || bank_document.extractedData?.tradeName;
-
-    if (tradeName && vatName && !companyNamesMatch(tradeName, vatName)) {
-      findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match VAT Corporate Name ("${vatName}")`);
-    }
-
-    if (tradeName && bankDocName && !companyNamesMatch(tradeName, bankDocName)) {
-      findings.push(`Name Discrepancy: Trade License Name ("${tradeName}") does not match Bank Letter Company Name ("${bankDocName}")`);
-    }
-
-    // Expiry check
-    if (trade_license.extractedData?.expiryDate) {
-      const expiryDate = parseTradeLicenseDate(trade_license.extractedData.expiryDate);
-      const isExpired = Boolean(expiryDate && expiryDate.getTime() < Date.now());
-      if (isExpired) {
-        findings.push(`License Expired: The submitted Trade license expired on ${trade_license.extractedData.expiryDate}`);
-      }
-    }
-
-    return findings;
-  };
-
-  const discrepancies = getDocumentDiscrepancyCheck();
-
   const getDocStatusBadge = (doc: DocumentVerification) => {
     switch (doc.status) {
       case 'empty':
@@ -221,6 +75,8 @@ export default function VerificationPanel({
         return <span className="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">OCR Extracted</span>;
       case 'registry_check':
         return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Checking...</span>;
+      case 'review':
+        return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">Review</span>;
       case 'verified':
         return <span className="text-[10px] text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">✓ Verified</span>;
       case 'failed':
@@ -328,6 +184,12 @@ export default function VerificationPanel({
                         Trade Name: {doc.extractedData.tradeName}
                       </p>
                     )}
+                    {doc.documentAcceptance?.status && (
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        Acceptance: {doc.documentAcceptance.status}
+                        {doc.documentAcceptance.missing_fields?.length ? ` · Missing: ${formatMissingFieldLabels(doc.documentAcceptance.missing_fields).join(', ')}` : ''}
+                      </p>
+                    )}
                     {doc.processingTime && (
                       <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider mt-0.5">
                         Processing time: {doc.processingTime}
@@ -341,24 +203,9 @@ export default function VerificationPanel({
           </div>
         </div>
 
-        {/* Alert discrepancies if any exist */}
-        {discrepancies.length > 0 && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded text-rose-800 space-y-2 shadow-sm">
-            <div className="flex items-center gap-2 text-rose-700 font-bold text-xs uppercase tracking-wider">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>Cross-Document Discrepancy Warnings</span>
-            </div>
-            <ul className="list-disc pl-5 text-[11px] space-y-1.5 leading-relaxed text-rose-700/90 font-medium">
-              {discrepancies.map((disc, idx) => (
-                <li key={idx}>{disc}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         {/* Registry compliance statement & action trigger */}
         <div className="pt-4 border-t border-slate-200">
-          {score === 100 && discrepancies.length === 0 ? (
+          {score === 100 ? (
             <div className="space-y-5">
               <div className="p-4 bg-green-50 border border-green-150 rounded-lg text-xs text-green-800 leading-relaxed font-sans shadow-xs">
                 <div className="flex items-center gap-2 mb-1.5 font-bold text-green-700 uppercase tracking-wider text-[10px]">
@@ -606,7 +453,6 @@ export default function VerificationPanel({
     title: string,
     fieldsDef: Array<{ key: string; label: string }>
   ) => {
-    const sentiment = getGptReviewSentiment(doc);
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -643,50 +489,72 @@ export default function VerificationPanel({
               )}
             </div>
 
-            {doc.gptReview && (
+            {doc.ocrResults && Object.keys(doc.ocrResults).length > 0 && (
               <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Expert Review</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Document Sentiment & Review</h5>
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Raw OCR Results</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Backend `results` object</h5>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${sentiment.classes}`}>
-                    {sentiment.label}
-                  </span>
                 </div>
-                <p className={`text-[10px] font-medium -mt-1 ${sentiment.subtitleClass}`}>{sentiment.subtitle}</p>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Plausibility Score</span>
-                    <span className="font-bold text-slate-800">{doc.gptReview.plausibility_score}</span>
-                  </div>
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Consistency</span>
-                    <span className={`font-bold ${doc.gptReview.isConsistent ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {doc.gptReview.isConsistent ? 'Consistent' : 'Inconsistent'}
-                    </span>
-                  </div>
+                  {Object.entries(doc.ocrResults).slice(0, 8).map(([key, field]) => (
+                    <div key={key} className="rounded border border-slate-200 bg-slate-50 p-3">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">{key}</span>
+                      <span className="font-bold text-slate-800 break-words">{field?.value || 'N/A'}</span>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Reasoning</span>
-                  <p className="text-xs text-slate-700 leading-relaxed">{doc.gptReview.reasoning}</p>
-                </div>
-
-                {doc.gptReview.anomalies.length > 0 && (
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Anomalies</span>
-                    <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700 leading-relaxed">
-                      {doc.gptReview.anomalies.map((anomaly, idx) => (
-                        <li key={idx}>{anomaly}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             )}
 
+            {doc.documentAcceptance && (
+              <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Document Acceptance</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Expert Decision</h5>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
+                    doc.documentAcceptance.status === 'approved'
+                      ? 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                      : doc.documentAcceptance.status === 'review'
+                        ? 'text-amber-700 bg-amber-100 border-amber-200'
+                        : 'text-rose-700 bg-rose-100 border-rose-200'
+                  }`}>
+                    {doc.documentAcceptance.status || 'unknown'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Score</span>
+                    <span className="font-bold text-slate-800">{doc.documentAcceptance.score ?? 'N/A'}</span>
+                  </div>
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Expired</span>
+                    <span className={`font-bold ${doc.documentAcceptance.is_expired ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {doc.documentAcceptance.is_expired ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Missing Mandatory Fields</span>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {doc.documentAcceptance.missing_fields?.length ? formatMissingFieldLabels(doc.documentAcceptance.missing_fields).join(', ') : 'None'}
+                  </p>
+                </div>
+                {doc.documentAcceptance.reasons?.length ? (
+                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Reasons</span>
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700 leading-relaxed">
+                      {doc.documentAcceptance.reasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
           </div>
         )}

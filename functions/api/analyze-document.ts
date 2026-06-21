@@ -185,6 +185,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       score: parsedResponse.score ?? null,
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
+      results: parsedResponse.results || {},
+      documentAcceptance: parsedResponse.document_acceptance || null,
       extractedData: {
         ...extractedData,
         tradeName: (extractedData as Record<string, unknown>).tradeName || tradeName,

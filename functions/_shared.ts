@@ -4,6 +4,16 @@ export type AzureValidationResponse = {
   status?: string;
   score?: number | null;
   results?: Record<string, { value?: string; confidence?: number }>;
+  document_acceptance?: {
+    document_type?: string;
+    status?: "approved" | "rejected" | "review" | string;
+    score?: number;
+    missing_fields?: string[];
+    reasons?: string[];
+    acceptable?: boolean;
+    expiry_date?: string;
+    is_expired?: boolean;
+  };
   gpt_review?: {
     is_consistent?: boolean;
     anomalies?: string[];
@@ -90,56 +100,6 @@ export function getResultValue(
   return "";
 }
 
-function cleanCompanyDisplayName(value: string) {
-  return value
-    .replace(/\s+/g, " ")
-    .replace(/\bL\s*\.?\s*L\s*\.?\s*C\s*\.?\b/gi, " ")
-    .replace(/\bLIMITED\b/gi, " ")
-    .replace(/\bLTD\b/gi, " ")
-    .replace(/\bCORP\b/gi, " ")
-    .replace(/\bINC\b/gi, " ")
-    .replace(/\bCO\b/gi, " ")
-    .replace(/\bLLP\b/gi, " ")
-    .replace(/\bFZE\b/gi, " ")
-    .replace(/\bFZC\b/gi, " ")
-    .replace(/\bEST\b/gi, " ")
-    .trim();
-}
-
-function isLocationLikeName(value: string) {
-  const normalized = cleanCompanyDisplayName(value).toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  if (/^(abu dhabi|dubai|sharjah|ajman|ra's? al khaimah|ras al khaimah|umm al quwain|fujairah|uae|united arab emirates)$/i.test(normalized)) {
-    return true;
-  }
-
-  const tokens = normalized.split(" ").filter(Boolean);
-  return tokens.length <= 2 && !/\b(llc|l\.l\.c|ltd|limited|company|corp|corporation|enterprise|group|trading|engineering|services|service|materials|equipment|contracting|consulting|solutions|industries|international|supplies|supply)\b/i.test(normalized);
-}
-
-function getTradeLicenseCompanyName(results: AzureValidationResponse["results"]) {
-  const candidates = [
-    getResultValue(results, ["TradeName"]),
-    getResultValue(results, ["CompanyName"]),
-    getResultValue(results, ["OperatingName"]),
-    getResultValue(results, ["LegalNameEnglish"]),
-    getResultValue(results, ["BusinessName"]),
-  ];
-
-  for (const candidate of candidates) {
-    const trimmed = candidate.trim();
-    if (trimmed && !isLocationLikeName(trimmed)) {
-      return cleanCompanyDisplayName(trimmed);
-    }
-  }
-
-  const fallback = candidates.find(candidate => candidate.trim()) || "";
-  return cleanCompanyDisplayName(fallback);
-}
-
 export function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
   const match = fileBase64.match(/^data:([^;]+);base64,/);
   return match?.[1] || fallbackMimeType || "application/octet-stream";
@@ -148,55 +108,6 @@ export function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: str
 export function getBase64Payload(fileBase64: string) {
   const separatorIndex = fileBase64.indexOf(",");
   return separatorIndex >= 0 ? fileBase64.slice(separatorIndex + 1) : fileBase64;
-}
-
-export function parseDateValue(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const isoMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-
-  const numericMatch = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-  if (numericMatch) {
-    const first = Number(numericMatch[1]);
-    const second = Number(numericMatch[2]);
-    const year = numericMatch[3];
-
-    const day = first;
-    const month = second;
-    const dayString = String(day).padStart(2, "0");
-    const monthString = String(month).padStart(2, "0");
-    return `${year}-${monthString}-${dayString}`;
-  }
-
-  const textualMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
-  if (textualMatch) {
-    const parsed = new Date(`${textualMatch[1]} ${textualMatch[2]} ${textualMatch[3]}`);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10);
-    }
-  }
-
-  const parsed = new Date(trimmed);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-
-  return null;
-}
-
-export function isNotExpired(expiryValue: string) {
-  const normalized = parseDateValue(expiryValue);
-  if (!normalized) {
-    return false;
-  }
-
-  return new Date(`${normalized}T00:00:00Z`) >= new Date();
 }
 
 export function normalizeValidationResponse(
@@ -208,7 +119,13 @@ export function normalizeValidationResponse(
 
   if (documentType === "trade_license") {
     const tradeName = getResultValue(results, ["TradeName"]);
-    const companyName = getTradeLicenseCompanyName(results);
+    const companyName = getResultValue(results, [
+      "TradeName",
+      "CompanyName",
+      "OperatingName",
+      "LegalNameEnglish",
+      "BusinessName",
+    ]);
     const licensedActivities = getResultValue(results, [
       "LicenceActivities",
       "LicensedActivities",
@@ -234,7 +151,13 @@ export function normalizeValidationResponse(
 
   if (documentType === "vat_certificate") {
     const tradeName = getResultValue(results, ["TradeName"]);
-    const companyName = getTradeLicenseCompanyName(results);
+    const companyName = getResultValue(results, [
+      "TradeName",
+      "CompanyName",
+      "LegalNameEnglish",
+      "BusinessName",
+      "OperatingName",
+    ]);
 
     return {
       vatNumber: getResultValue(results, [
@@ -256,7 +179,6 @@ export function normalizeValidationResponse(
     };
   }
 
-  const tradeName = getResultValue(results, ["TradeName"]);
   return {
     bankAccountNumber: getResultValue(results, [
       "BankAccountNumber",
@@ -264,13 +186,14 @@ export function normalizeValidationResponse(
       "IBAN",
     ]),
     bankName: getResultValue(results, ["BankName", "Bank"]),
-    companyName: getTradeLicenseCompanyName(results) || getResultValue(results, [
+    companyName: getResultValue(results, [
+      "TradeName",
       "AccountName",
       "CompanyName",
       "LegalNameEnglish",
       "BusinessName",
     ]),
-    tradeName,
+    tradeName: getResultValue(results, ["TradeName"]),
     status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
   };
 }

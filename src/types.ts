@@ -16,13 +16,18 @@ export interface DocumentVerification {
   type: 'trade_license' | 'vat_certificate' | 'bank_document';
   fileName: string;
   uploadedAt: string;
-  status: 'empty' | 'verifying' | 'ocr_completed' | 'registry_check' | 'verified' | 'failed';
+  status: 'empty' | 'verifying' | 'ocr_completed' | 'registry_check' | 'review' | 'verified' | 'failed';
   extractedData?: Record<string, string>;
-  gptReview?: {
-    isConsistent: boolean;
-    anomalies: string[];
-    plausibility_score: number;
-    reasoning: string;
+  ocrResults?: Record<string, { value?: string; confidence?: number }>;
+  documentAcceptance?: {
+    document_type?: string;
+    status?: 'approved' | 'rejected' | 'review' | string;
+    score?: number;
+    missing_fields?: string[];
+    reasons?: string[];
+    acceptable?: boolean;
+    expiry_date?: string;
+    is_expired?: boolean;
   };
   validationLogs: string[];
   processingTimeMs?: number;
