@@ -47,27 +47,19 @@ function getResultValue(results: Record<string, { value?: string }>, keys: strin
   return '';
 }
 
-function formatMissingFieldLabel(field: string) {
-  const normalized = field.trim().toLowerCase();
-  const labelMap: Record<string, string> = {
-    trade_name: 'Trade Name',
-    expiry_date: 'Expiry Date',
-    licensed_activities: 'Licensed Activities',
-    vat_number: 'VAT Number',
-    company_name: 'Company Name',
-    bank_name: 'Bank Name',
-    license_number: 'License Number',
-    tax_number: 'Tax Number',
-    account_number: 'Account Number',
-    bank_account_number: 'Bank Account Number',
-    qr_code: 'QR Code',
-  };
-
-  return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+function getExpectedAcceptanceDocumentType(documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
+  if (documentType === 'trade_license') return 'trade';
+  if (documentType === 'vat_certificate') return 'vat';
+  return 'bank';
 }
 
-function formatMissingFieldLabels(fields: string[]) {
-  return fields.map(formatMissingFieldLabel);
+function createWelcomeMessage(): ChatMessage {
+  return {
+    id: 'welcome',
+    sender: 'agent',
+    text: `Hello and welcome to the Secure Supplier Portal! 🛡️\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! **What is the registered Commercial Name of your Enterprise?**`,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
 }
 
 function normalizeCompanyName(value: string) {
@@ -183,7 +175,7 @@ const initialRegistrationState: SupplierRegistrationState = {
 
 export default function App() {
   const [registrationState, setRegistrationState] = useState<SupplierRegistrationState>(initialRegistrationState);
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([createWelcomeMessage()]);
   const [registryRecords, setRegistryRecords] = useState<any[]>([]);
   const [showRegistryDrawer, setShowRegistryDrawer] = useState(false);
   const [submissionComplete, setSubmissionComplete] = useState(false);
@@ -267,17 +259,19 @@ export default function App() {
         ? `Company name mismatch. Entered: "${enteredCompanyName}". OCR: "${extractedCompanyName}".`
         : '';
       const acceptanceStatus = String(documentAcceptance?.status || (documentAcceptance?.acceptable ? 'approved' : '')).toLowerCase();
-      const missingFields = Array.isArray(documentAcceptance?.missing_fields)
-        ? documentAcceptance.missing_fields
-        : [];
-      const missingFieldLabels = formatMissingFieldLabels(missingFields);
+      const expectedDocumentType = getExpectedAcceptanceDocumentType(type);
+      const returnedDocumentType = String(documentAcceptance?.document_type || '').trim().toLowerCase();
+      const documentTypeMatches = !returnedDocumentType || returnedDocumentType === expectedDocumentType;
+      const documentTypeMismatchReason = !documentTypeMatches
+        ? `Please upload the correct ${expectedDocumentType.toUpperCase()} document for this step.`
+        : '';
       const decisionLabel =
-        companyNameAligned && acceptanceStatus === 'approved'
+        companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
           ? 'APPROVED'
-          : companyNameAligned && acceptanceStatus === 'review'
+          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
             ? 'REVIEW'
             : 'REJECTED';
-      const effectiveDocumentAcceptance = companyNameAligned
+      const effectiveDocumentAcceptance = companyNameAligned && documentTypeMatches
         ? documentAcceptance
         : {
             ...(documentAcceptance || {}),
@@ -286,6 +280,7 @@ export default function App() {
             reasons: [
               ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
               companyMismatchReason,
+              documentTypeMismatchReason,
             ].filter(Boolean),
           };
       const bankQrRequired = type === 'bank_document' && qrCodes.length === 0;
@@ -308,9 +303,9 @@ export default function App() {
       const effectiveFinalStatus: DocumentVerification['status'] =
         bankQrRequired
           ? 'failed'
-          : companyNameAligned && acceptanceStatus === 'approved'
+          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
             ? 'verified'
-            : companyNameAligned && acceptanceStatus === 'review'
+            : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
               ? 'review'
               : 'failed';
 
@@ -337,8 +332,10 @@ export default function App() {
                 `Company Name matched: "${getDisplayOcrName(extracted)}"`,
                 `Identification ID parsed: "${Object.values(extracted)[0] || 'N/A'}"`,
                 `Acceptance Decision: ${decisionLabel}`,
+                documentTypeMatches
+                  ? 'Document type matched the active workflow step.'
+                  : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
                 !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
-                missingFieldLabels.length > 0 ? `Missing mandatory fields: ${missingFieldLabels.join(', ')}` : 'No mandatory fields missing.',
                 ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
                   ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
                   : [])
@@ -399,9 +396,11 @@ export default function App() {
             ...doc.validationLogs,
             `Document Acceptance Decision: ${decisionLabel}`,
             qrEnforcedDocumentAcceptance?.document_type ? `Document Type: ${qrEnforcedDocumentAcceptance.document_type}` : 'Document Type: N/A',
+            documentTypeMatches
+              ? 'Document type matched the active workflow step.'
+              : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
             !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
             bankQrRequired ? `QR code is missing for bank document.` : 'QR code check passed.',
-            missingFieldLabels.length > 0 ? `Missing mandatory fields: ${missingFieldLabels.join(', ')}` : 'Missing mandatory fields: none',
             ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
               ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
               : []),
@@ -453,7 +452,7 @@ export default function App() {
             }`
           : effectiveFinalStatus === 'review'
             ? `⚠ **Document Sent for Review**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Status**\nYour document is currently under expert review.\n\n**Next Step**\nWe will continue once the acceptance rules are resolved.`
-            : `⚠ **Document Rejected**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Why it was flagged**\n${!companyNameAligned ? `• ${companyMismatchReason}` : '• The document did not satisfy the required validation checks.'}\n\n**Next Step**\nPlease upload a corrected document to continue.`
+            : `⚠ **Document Rejected**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Why it was flagged**\n${!documentTypeMatches ? `• ${documentTypeMismatchReason}` : !companyNameAligned ? `• ${companyMismatchReason}` : '• The document did not satisfy the required validation checks.'}\n\n**Next Step**\nPlease upload a corrected document to continue.`
       );
 
     } catch (err: any) {
@@ -496,7 +495,7 @@ export default function App() {
 
   const handleReset = () => {
     setRegistrationState(initialRegistrationState);
-    setChatHistory([]);
+    setChatHistory([createWelcomeMessage()]);
     setSubmissionComplete(false);
   };
 

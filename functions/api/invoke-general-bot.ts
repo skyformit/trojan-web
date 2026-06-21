@@ -3,6 +3,35 @@ import { PagesEnvBindings } from "../_shared";
 
 type GeneralBotResponse = {
   ok?: boolean;
+  intent?: "lookup" | "chat" | string;
+  next_action?: string;
+  context?: {
+    intent?: "lookup" | "chat" | string;
+    document_type?: string;
+    entities?: {
+      company_name?: string | null;
+      trade_license_number?: string | null;
+      vat_number?: string | null;
+      bank_name?: string | null;
+      account_number?: string | null;
+      iban?: string | null;
+    };
+    next_action?: string;
+    classification?: {
+      label?: string;
+      confidence?: number;
+      reason?: string;
+    };
+  };
+  entities?: {
+    company_name?: string | null;
+    trade_license_number?: string | null;
+    vat_number?: string | null;
+    bank_name?: string | null;
+    account_number?: string | null;
+    iban?: string | null;
+  };
+  confidence?: number;
   status?: "completed" | "expired" | "renewal_due" | string;
   text?: string;
   source?: string;
@@ -30,6 +59,37 @@ type GeneralBotResponse = {
     message?: string;
   };
 };
+
+function isServerDrivenTbmsLookup(payload: GeneralBotResponse) {
+  const intent = String(payload.context?.intent || payload.intent || "").toLowerCase();
+  const nextAction = String(payload.context?.next_action || payload.next_action || "").toLowerCase();
+  return intent === "lookup" && nextAction === "tbms_lookup";
+}
+
+function extractTbmsLookupQuery(payload: GeneralBotResponse, fallbackText: string) {
+  const contextEntities = payload.context?.entities || {};
+  const companyName = String(contextEntities.company_name || payload.entities?.company_name || "").trim();
+  if (companyName) {
+    return companyName;
+  }
+
+  const tradeLicenseNumber = String(contextEntities.trade_license_number || payload.entities?.trade_license_number || "").trim();
+  if (tradeLicenseNumber) {
+    return tradeLicenseNumber;
+  }
+
+  const vatNumber = String(contextEntities.vat_number || payload.entities?.vat_number || "").trim();
+  if (vatNumber) {
+    return vatNumber;
+  }
+
+  const bankName = String(contextEntities.bank_name || payload.entities?.bank_name || "").trim();
+  if (bankName) {
+    return bankName;
+  }
+
+  return fallbackText;
+}
 
 function parseExpiryDateFromText(text: string) {
   const patterns = [
@@ -237,6 +297,11 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
         (parsedResponse?.ok === false || parsedResponse?.error?.code === "response_parse_error")
       ) {
         return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
+      }
+
+      if (isServerDrivenTbmsLookup(parsedResponse)) {
+        const lookupQuery = extractTbmsLookupQuery(parsedResponse, inputText);
+        return json(await fetchVendorLookupFallback(lookupQuery, TBMS_VENDOR_LOOKUP_ENDPOINT));
       }
 
       return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);

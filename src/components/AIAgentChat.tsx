@@ -3,23 +3,8 @@ import { Send, Upload, FileText, CheckCircle2, ShieldAlert, RefreshCw, Bot, Spar
 import { ChatMessage, SupplierRegistrationState, DocumentVerification } from '../types';
 import { streamChatMessage } from '../utils/chatStream';
 import {
-  applyGuidedAnswerToRegistrationState,
-  GUIDED_ONBOARDING_CONFIG,
-  getGuidedOnboardingCompletionPrompt,
-  getGuidedOnboardingFieldLabel,
-  getGuidedOnboardingIntroPrompt,
-  getGuidedOnboardingStartPrompt,
-  getGuidedOnboardingQuestion,
-  formatGuidedOnboardingPrompt,
-  GuidedOnboardingAnswerState,
-  GuidedOnboardingField,
-  isGuidedOnboardingTrigger,
-  normalizeGuidedOnboardingAnswer,
   normalizeUaeMobileNumber,
-  normalizeGuidedPhoneNumber,
   validateGuidedCompanyName,
-  validateGuidedEmail,
-  validateGuidedPhoneNumber,
 } from '../config/guidedOnboarding';
 
 interface AIAgentChatProps {
@@ -32,8 +17,6 @@ interface AIAgentChatProps {
 
 const ENABLE_LOCAL_ROUTING_HEURISTICS =
   import.meta.env.VITE_ENABLE_LOCAL_ROUTING_HEURISTICS === 'true';
-const ENABLE_GUIDED_ONBOARDING_FLOW =
-  import.meta.env.VITE_ENABLE_GUIDED_ONBOARDING_FLOW === 'true';
 
 type GeneralBotResponse = {
   ok?: boolean;
@@ -44,6 +27,24 @@ type GeneralBotResponse = {
   source_type?: string;
   response_type?: string;
   conversation_id?: string;
+  context?: {
+    intent?: 'lookup' | 'chat' | string;
+    document_type?: string;
+    entities?: {
+      company_name?: string | null;
+      trade_license_number?: string | null;
+      vat_number?: string | null;
+      bank_name?: string | null;
+      account_number?: string | null;
+      iban?: string | null;
+    };
+    next_action?: string;
+    classification?: {
+      label?: string;
+      confidence?: number;
+      reason?: string;
+    };
+  };
   routing?: {
     expiry_date?: string;
     days_remaining?: number;
@@ -111,13 +112,6 @@ type VendorLookupSummary = {
   website: string;
   chamberNo: string;
   businessActivity: string;
-};
-
-const INITIAL_GUIDED_ONBOARDING_ANSWERS: GuidedOnboardingAnswerState = {
-  companyName: '',
-  contactName: '',
-  contactEmail: '',
-  phoneNumber: '',
 };
 
 function parseExpiryDateFromText(text: string) {
@@ -360,125 +354,6 @@ function getUploadTypeForStep(step: SupplierRegistrationState['currentStep']) {
   return null;
 }
 
-function isQuestionLikeText(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  if (/\?$/.test(normalized)) {
-    return true;
-  }
-
-  return /^(what|how|why|when|where|who|which|can you|could you|would you|should i|is it|are you|am i|do you|does it|please)\b/.test(normalized);
-}
-
-function getGuidedValidationError(field: GuidedOnboardingField, value: string) {
-  if (field === 'companyName') {
-    const result = validateGuidedCompanyName(value);
-    return result.valid ? '' : result.reason;
-  }
-
-  if (field === 'contactEmail') {
-    const result = validateGuidedEmail(value);
-    return result.valid ? '' : result.reason;
-  }
-
-  if (field === 'phoneNumber') {
-    const result = validateGuidedPhoneNumber(value);
-    return result.valid ? '' : result.reason;
-  }
-
-  return '';
-}
-
-function getNormalizedGuidedAnswer(field: GuidedOnboardingField, value: string) {
-  if (field === 'phoneNumber') {
-    return normalizeGuidedPhoneNumber(value);
-  }
-
-  return normalizeGuidedOnboardingAnswer(field, value);
-}
-
-type GuidedOnboardingLLMClassification = {
-  kind: 'company_name' | 'greeting' | 'unrelated';
-  value: string;
-  reason: string;
-};
-
-function parseGuidedOnboardingClassification(text: string): GuidedOnboardingLLMClassification | null {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  if (jsonMatch?.[0]) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]) as Partial<GuidedOnboardingLLMClassification>;
-      if (parsed.kind === 'company_name' || parsed.kind === 'greeting' || parsed.kind === 'unrelated') {
-        return {
-          kind: parsed.kind,
-          value: typeof parsed.value === 'string' ? parsed.value.trim() : '',
-          reason: typeof parsed.reason === 'string' ? parsed.reason.trim() : '',
-        };
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-async function classifyGuidedOnboardingReply(userText: string): Promise<GuidedOnboardingLLMClassification> {
-  const fallback = (kind: GuidedOnboardingLLMClassification['kind'], value = '', reason = '') => ({
-    kind,
-    value,
-    reason,
-  });
-
-  try {
-    const response = await fetch('/api/invoke-general-bot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        intent: 'general_chat',
-        text: userText,
-        message: userText,
-        prompt: [
-          GUIDED_ONBOARDING_CONFIG.companyNameClassifierPrompt,
-          '',
-          `User reply: ${userText}`,
-        ].join('\n'),
-      }),
-    });
-
-    const data = (await response.json()) as GeneralBotResponse;
-    const parsed = parseGuidedOnboardingClassification(data.text || '');
-    if (parsed) {
-      return parsed;
-    }
-  } catch {
-    // Fall through to deterministic fallback below.
-  }
-
-  const normalized = userText.trim();
-  if (!normalized) {
-    return fallback('unrelated', '', 'Empty reply.');
-  }
-
-  if (/^(hi|hello|hey|thanks|thank you)\b/i.test(normalized)) {
-    return fallback('greeting', '', 'Greeting detected.');
-  }
-
-  if (isQuestionLikeText(normalized)) {
-    return fallback('unrelated', '', 'Question-like reply detected.');
-  }
-
-  return fallback('company_name', normalized, 'No greeting detected; treating as company name.');
-}
-
 function extractVendorName(text: string) {
   const match = text.match(/Vendor Name:\s*(.+)/i);
   return match?.[1]?.trim() || '';
@@ -508,6 +383,14 @@ function getStructuredSource(response: GeneralBotResponse) {
 
 function getStructuredResponseType(response: GeneralBotResponse) {
   return (response.response_type || '').toLowerCase();
+}
+
+function getStructuredContextIntent(response: GeneralBotResponse) {
+  return String(response.context?.intent || '').toLowerCase();
+}
+
+function getStructuredContextNextAction(response: GeneralBotResponse) {
+  return String(response.context?.next_action || '').toLowerCase();
 }
 
 function classifyInitialInput(value: string) {
@@ -586,12 +469,18 @@ function classifyInitialInput(value: string) {
 function shouldShowContactForm(response: GeneralBotResponse) {
   const sourceType = getStructuredSource(response);
   const responseType = getStructuredResponseType(response);
+  const contextIntent = getStructuredContextIntent(response);
+  const contextNextAction = getStructuredContextNextAction(response);
 
   if (response.ok === false) {
     return false;
   }
 
   if (sourceType === 'tbms' || sourceType === 'workflow') {
+    return true;
+  }
+
+  if (contextIntent === 'lookup' && contextNextAction === 'tbms_lookup') {
     return true;
   }
 
@@ -606,13 +495,18 @@ function shouldShowContactForm(response: GeneralBotResponse) {
 
   const normalized = (response.text || '').toLowerCase();
   return (
-    normalized.includes('vendor name:') ||
-    normalized.includes('trade license no.:') ||
-    normalized.includes('trade license no:') ||
-    normalized.includes('license expiry date:') ||
-    normalized.includes('approved vendor') ||
-    normalized.includes('route: vendor approval') ||
-    normalized.includes('route: renewal approval')
+    normalized.includes('please complete the notification contact setup') ||
+    normalized.includes('notification contact setup') ||
+    normalized.includes('please provide the contact details') ||
+    normalized.includes('provide the contact details') ||
+    normalized.includes('contact details below') ||
+    normalized.includes('who is the contact person') ||
+    normalized.includes('contact person for this application') ||
+    normalized.includes('please start by uploading one of the required onboarding documents') ||
+    normalized.includes('please upload or drop your') ||
+    normalized.includes('please upload your valid trade license') ||
+    normalized.includes('please upload your trade license document to begin') ||
+    normalized.includes('please upload your trade license')
   );
 }
 
@@ -642,6 +536,36 @@ function validateContactInfo(name: string, email: string, phone: string): Contac
   return errors;
 }
 
+function hasCompleteContactInfo(state: SupplierRegistrationState) {
+  const name = state.contactName?.trim();
+  const email = state.contactEmail?.trim();
+  const phone = normalizeUaeMobileNumber(state.phoneNumber || '');
+
+  return Boolean(
+    name &&
+    email &&
+    /^([^\s@]+@[^\s@]+\.[^\s@]+)$/.test(email) &&
+    /^5[1-9]\d{7}$/.test(phone)
+  );
+}
+
+function hasContactConfirmationMessage(chatHistory: ChatMessage[]) {
+  return chatHistory.some(message => {
+    if (message.sender !== 'agent') {
+      return false;
+    }
+
+    const normalized = message.text.toLowerCase();
+    return (
+      normalized.includes('contact details registered') ||
+      normalized.includes('recipient name') ||
+      normalized.includes('notification channels') ||
+      normalized.includes('next step') &&
+        normalized.includes('upload or drop your valid trade license')
+    );
+  });
+}
+
 export default function AIAgentChat({
   registrationState,
   setRegistrationState,
@@ -659,15 +583,10 @@ export default function AIAgentChat({
   const [uaePhoneLocalNumber, setUaePhoneLocalNumber] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
-  const [guidedOnboardingActive, setGuidedOnboardingActive] = useState(false);
-  const [guidedOnboardingStepIndex, setGuidedOnboardingStepIndex] = useState(-1);
-  const [guidedOnboardingAnswers, setGuidedOnboardingAnswers] = useState<GuidedOnboardingAnswerState>(INITIAL_GUIDED_ONBOARDING_ANSWERS);
-  const [guidedInlineError, setGuidedInlineError] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTypeForCurrentStep = getUploadTypeForStep(registrationState.currentStep);
-  const canShowUploadPanel = !guidedOnboardingActive && Boolean(uploadTypeForCurrentStep);
-  const effectiveUploadType = canShowUploadPanel ? uploadTypeForCurrentStep : null;
+  const effectiveUploadType = uploadTypeForCurrentStep;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -677,16 +596,8 @@ export default function AIAgentChat({
     if (chatHistory.length === 0) {
       setConversationId(null);
       setVendorLookupSummary(null);
-      setGuidedOnboardingActive(false);
-      setGuidedOnboardingStepIndex(-1);
-      setGuidedOnboardingAnswers(INITIAL_GUIDED_ONBOARDING_ANSWERS);
-      setGuidedInlineError('');
     }
   }, [chatHistory.length]);
-
-  useEffect(() => {
-    setGuidedInlineError('');
-  }, [guidedOnboardingStepIndex, guidedOnboardingActive]);
 
   // Adjust active expectations based on registration sequence step
   useEffect(() => {
@@ -702,20 +613,6 @@ export default function AIAgentChat({
       setActiveUploadType(null);
     }
   }, [registrationState.currentStep]);
-
-  // Automated welcome script on initial mount
-  useEffect(() => {
-    if (chatHistory.length === 0) {
-      setChatHistory([
-        {
-          id: 'welcome',
-          sender: 'agent',
-          text: `Hello and welcome to the Secure Supplier Portal! 🛡️\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! **What is the registered Commercial Name of your Enterprise?**`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }
-  }, []);
 
   useEffect(() => {
     if (!contactValidationAttempted) {
@@ -742,6 +639,19 @@ export default function AIAgentChat({
     setUaePhoneLocalNumber(localNumber);
   }, [registrationState.phoneNumber]);
 
+  useEffect(() => {
+    if (
+      registrationState.currentStep === 'contact_info' &&
+      hasCompleteContactInfo(registrationState) &&
+      hasContactConfirmationMessage(chatHistory)
+    ) {
+      setRegistrationState(prev => ({
+        ...prev,
+        currentStep: 'trade_license_upload'
+      }));
+    }
+  }, [chatHistory, registrationState, setRegistrationState]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
@@ -751,11 +661,6 @@ export default function AIAgentChat({
       return;
     }
 
-    const normalizedCompanyCandidate = normalizeGuidedOnboardingAnswer('companyName', text);
-    const directCompanyCandidate = validateGuidedCompanyName(normalizedCompanyCandidate).valid
-      ? normalizedCompanyCandidate
-      : '';
-
     const initialInputClassification =
       ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
         ? classifyInitialInput(text)
@@ -763,10 +668,6 @@ export default function AIAgentChat({
 
     if (!textToSend) {
       setInputText('');
-    }
-
-    if (guidedInlineError) {
-      setGuidedInlineError('');
     }
 
     // Add user message to history
@@ -779,183 +680,6 @@ export default function AIAgentChat({
     };
 
     setChatHistory(prev => [...prev, newUserMessage]);
-
-    if (ENABLE_GUIDED_ONBOARDING_FLOW) {
-      if (
-        !guidedOnboardingActive &&
-        registrationState.currentStep === 'initial' &&
-        directCompanyCandidate
-      ) {
-        setGuidedOnboardingActive(false);
-        setGuidedOnboardingStepIndex(-1);
-        setIsRequestInProgress(true);
-        setGuidedInlineError('');
-        setConversationId(null);
-        setVendorLookupSummary(null);
-        setRegistrationState(prev => ({
-          ...prev,
-          companyName: directCompanyCandidate,
-          currentStep: 'contact_info',
-          workflowRoute: 'general',
-          workflowStatus: 'completed',
-          workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-          workflowApiPath: '/api/invoke-general-bot'
-        }));
-
-        setIsRequestInProgress(false);
-
-        return;
-      }
-
-      const shouldStartGuidedOnboarding = !guidedOnboardingActive && isGuidedOnboardingTrigger(text);
-
-      if (shouldStartGuidedOnboarding) {
-        const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
-        if (hasValidStoredCompanyName) {
-          setGuidedOnboardingActive(false);
-          setGuidedOnboardingStepIndex(-1);
-          setContactValidationAttempted(false);
-          setContactErrors({});
-          setRegistrationState(prev => ({
-            ...prev,
-            currentStep: 'contact_info',
-            workflowRoute: 'general',
-            workflowStatus: 'completed',
-            workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-            workflowApiPath: '/api/invoke-general-bot'
-          }));
-
-          setTimeout(() => {
-            setIsRequestInProgress(false);
-          }, 350);
-
-          return;
-        }
-
-        activateGuidedOnboarding(0);
-
-        setTimeout(async () => {
-          await streamChatMessage(
-            setChatHistory,
-            getGuidedOnboardingStartPrompt(0),
-            {
-              onFirstChunk: () => setIsRequestInProgress(false)
-            }
-          );
-        }, 350);
-
-        return;
-      }
-
-      if (guidedOnboardingActive) {
-        const currentQuestion = getGuidedOnboardingQuestion(guidedOnboardingStepIndex);
-
-        if (currentQuestion) {
-          if (currentQuestion.field === 'companyName') {
-            setIsRequestInProgress(true);
-            const classification = await classifyGuidedOnboardingReply(text);
-            const candidate = normalizeGuidedOnboardingAnswer(currentQuestion.field, classification.value || text);
-            const validationError = getGuidedValidationError(currentQuestion.field, candidate);
-            if (validationError) {
-              setGuidedInlineError(`Company name rejected: ${validationError}`);
-              setIsRequestInProgress(false);
-              return;
-            }
-
-            setGuidedInlineError('');
-            const answer = candidate;
-
-            setGuidedOnboardingAnswers(prev => ({
-              ...prev,
-              [currentQuestion.field]: answer
-            }));
-
-            setRegistrationState(prev => applyGuidedAnswerToRegistrationState(prev, currentQuestion.field, answer));
-            setGuidedOnboardingActive(false);
-            setGuidedOnboardingStepIndex(-1);
-            setIsRequestInProgress(true);
-
-            setTimeout(async () => {
-              setRegistrationState(prev => ({
-                ...prev,
-                currentStep: 'contact_info',
-                workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-                workflowApiPath: '/api/invoke-general-bot'
-              }));
-
-              setIsRequestInProgress(false);
-            }, 350);
-
-            return;
-          }
-
-          const candidate = getNormalizedGuidedAnswer(currentQuestion.field, text);
-          const validationError = getGuidedValidationError(currentQuestion.field, candidate);
-          if (validationError) {
-            const prefix =
-              currentQuestion.field === 'contactEmail'
-                ? 'Email rejected'
-                : currentQuestion.field === 'phoneNumber'
-                  ? 'Mobile number rejected'
-                  : `${getGuidedOnboardingFieldLabel(currentQuestion.field)} rejected`;
-
-            setGuidedInlineError(`${prefix}: ${validationError}`);
-            setIsRequestInProgress(false);
-            return;
-          }
-
-          setGuidedInlineError('');
-          const answer = candidate;
-          const nextQuestionIndex = guidedOnboardingStepIndex + 1;
-          const nextQuestion = getGuidedOnboardingQuestion(nextQuestionIndex);
-
-          setGuidedOnboardingAnswers(prev => ({
-            ...prev,
-            [currentQuestion.field]: answer
-          }));
-
-          setRegistrationState(prev => applyGuidedAnswerToRegistrationState(prev, currentQuestion.field, answer));
-          setGuidedOnboardingStepIndex(nextQuestionIndex);
-          setIsRequestInProgress(true);
-
-          setTimeout(async () => {
-            if (nextQuestion) {
-              await streamChatMessage(
-                setChatHistory,
-                `Captured your ${getGuidedOnboardingFieldLabel(currentQuestion.field)}.\n\n${formatGuidedOnboardingPrompt(nextQuestion.prompt)}`,
-                {
-                  onFirstChunk: () => setIsRequestInProgress(false)
-                }
-              );
-            } else {
-              setGuidedOnboardingActive(false);
-              setGuidedOnboardingStepIndex(-1);
-              setRegistrationState(prev => ({
-                ...prev,
-                currentStep: 'trade_license_upload',
-                workflowRoute: 'general',
-                workflowStatus: 'completed',
-                workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-                workflowApiPath: '/api/invoke-general-bot'
-              }));
-
-              await streamChatMessage(
-                setChatHistory,
-                getGuidedOnboardingCompletionPrompt({
-                  ...guidedOnboardingAnswers,
-                  [currentQuestion.field]: answer
-                }),
-                {
-                  onFirstChunk: () => setIsRequestInProgress(false)
-                }
-              );
-            }
-          }, 350);
-
-          return;
-        }
-      }
-    }
 
     // Handle bot logic processing based on state
     setTimeout(() => {
@@ -1034,6 +758,8 @@ export default function AIAgentChat({
           ? 'completed'
         : workflowState.workflowStatus;
 
+      const shouldOpenContactPanel = showContactForm || shouldOpenContactSetup || (!tbmsVendor && finalWorkflowRoute !== 'general');
+
       setRegistrationState(prev => {
         const validVendorName = validateGuidedCompanyName(vendorName).valid ? vendorName : '';
         const validUserCompanyName = validateGuidedCompanyName(userText).valid ? userText : '';
@@ -1049,14 +775,14 @@ export default function AIAgentChat({
                 : 'TCG-Vendor-Approval-Workflow'
               : forceVendorLookup
                 ? 'TCG-Vendor-Approval-Workflow'
-              : workflowState.workflowName,
+                : workflowState.workflowName,
             workflowApiPath: tbmsLifecycleStatus
               ? tbmsLifecycleStatus === 'renewal_due'
                 ? '/api/renewal-vendor-approval-workflow'
                 : '/api/vendor-approval-workflow'
               : forceVendorLookup
                 ? '/api/vendor-approval-workflow'
-              : workflowState.workflowApiPath,
+                : workflowState.workflowApiPath,
           }),
           companyName: prev.companyName || validVendorName || validUserCompanyName,
           currentStep: 'initial'
@@ -1106,7 +832,7 @@ export default function AIAgentChat({
         );
       }
 
-      if (showContactForm || shouldOpenContactSetup) {
+      if (shouldOpenContactPanel) {
         setRegistrationState(prev => ({
           ...prev,
           currentStep: 'contact_info'
@@ -1304,7 +1030,6 @@ We will verify your company's credentials after the upload.`
   };
 
   const getStepIndicator = () => {
-    if (guidedOnboardingActive) return 'Workflow: Guided Supplier Onboarding';
     if (registrationState.currentStep === 'initial') return 'Step 1: Account Identification';
     if (registrationState.currentStep === 'contact_info') return 'Step 2: Notification Setup';
     if (registrationState.currentStep === 'trade_license_upload') return 'Step 3: Trade License Audit';
@@ -1320,63 +1045,8 @@ We will verify your company's credentials after the upload.`
   const isAgentStreaming = chatHistory.some(message => message.sender === 'agent' && message.isPending);
   const showContactSetup =
     registrationState.currentStep === 'contact_info' &&
-    (registrationState.workflowRoute !== 'general' || registrationState.workflowName === 'GUIDED_SUPPLIER_ONBOARDING');
-
-  const activateGuidedOnboarding = (startIndex = 0) => {
-    setGuidedOnboardingActive(true);
-    setGuidedOnboardingStepIndex(startIndex);
-    setGuidedOnboardingAnswers(INITIAL_GUIDED_ONBOARDING_ANSWERS);
-    setIsRequestInProgress(true);
-    setConversationId(null);
-    setVendorLookupSummary(null);
-    setContactValidationAttempted(false);
-    setContactErrors({});
-    setRegistrationState(prev => ({
-      ...prev,
-      currentStep: 'initial',
-      workflowRoute: 'general',
-      workflowStatus: 'completed',
-      workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-      workflowApiPath: '/api/invoke-general-bot'
-    }));
-  };
-
-  const startGuidedOnboarding = () => {
-    const hasValidStoredCompanyName = validateGuidedCompanyName(registrationState.companyName || '').valid;
-    if (hasValidStoredCompanyName) {
-      setGuidedOnboardingActive(false);
-      setGuidedOnboardingStepIndex(-1);
-      setContactValidationAttempted(false);
-      setContactErrors({});
-      setIsRequestInProgress(true);
-      setRegistrationState(prev => ({
-        ...prev,
-        currentStep: 'contact_info',
-        workflowRoute: 'general',
-        workflowStatus: 'completed',
-        workflowName: 'GUIDED_SUPPLIER_ONBOARDING',
-        workflowApiPath: '/api/invoke-general-bot'
-      }));
-
-      setIsRequestInProgress(false);
-      return;
-    }
-
-    activateGuidedOnboarding(0);
-    void streamChatMessage(
-      setChatHistory,
-      getGuidedOnboardingStartPrompt(0),
-      {
-        onFirstChunk: () => setIsRequestInProgress(false)
-      }
-    );
-  };
-
-  const stopGuidedOnboarding = () => {
-    setGuidedOnboardingActive(false);
-    setGuidedOnboardingStepIndex(-1);
-    setIsRequestInProgress(false);
-  };
+    !isRequestInProgress &&
+    (!hasCompleteContactInfo(registrationState) || !hasContactConfirmationMessage(chatHistory));
   return (
     <div className="flex flex-col h-[600px] border border-slate-200 bg-white rounded-lg overflow-hidden shadow-sm">
       {/* Bot Chat Header with security seal */}
@@ -1394,19 +1064,6 @@ We will verify your company's credentials after the upload.`
           </div>
         </div>
         <div className="text-right flex items-center gap-2">
-          {ENABLE_GUIDED_ONBOARDING_FLOW && (
-            <button
-              type="button"
-              onClick={guidedOnboardingActive ? stopGuidedOnboarding : startGuidedOnboarding}
-              className={`text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded-sm border transition ${
-                guidedOnboardingActive
-                  ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100'
-                  : 'text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100'
-              }`}
-            >
-              {guidedOnboardingActive ? 'Exit Guided Mode' : 'Guided Onboarding'}
-            </button>
-          )}
           <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-sm">
             {getStepIndicator()}
           </span>
@@ -1750,31 +1407,22 @@ We will verify your company's credentials after the upload.`
         <div className="p-3 bg-white border-t border-slate-200">
           <div className="flex items-center gap-2">
             <input
-            type="text"
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              if (guidedInlineError) {
-                setGuidedInlineError('');
-              }
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder={
-              isUploading
-                ? 'Validation in progress... please wait...'
-                : isRequestInProgress
-                  ? 'Processing request...'
-                  : guidedOnboardingActive
-                    ? 'Type your answer...'
+              type="text"
+              value={inputText}
+              onChange={(e) => {
+                setInputText(e.target.value);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder={
+                isUploading
+                  ? 'Validation in progress... please wait...'
+                  : isRequestInProgress
+                    ? 'Processing request...'
                     : 'Describe the supplier request to route it...'
-            }
-            className={`flex-1 text-xs bg-slate-50 border text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:bg-white transition ${
-              guidedOnboardingActive && guidedInlineError
-                ? 'border-rose-300 focus:ring-rose-500'
-                : 'border-slate-200 focus:ring-indigo-500'
-            }`}
-            disabled={isUploading || isRequestInProgress}
-          />
+              }
+              className="flex-1 text-xs bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 rounded py-2 px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition"
+              disabled={isUploading || isRequestInProgress}
+            />
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputText.trim() || isUploading || isRequestInProgress}
@@ -1783,13 +1431,6 @@ We will verify your company's credentials after the upload.`
             <Send className="w-4 h-4" />
           </button>
           </div>
-
-          {guidedOnboardingActive && guidedInlineError && (
-            <div className="mt-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{guidedInlineError}</span>
-            </div>
-          )}
         </div>
       )}
     </div>
