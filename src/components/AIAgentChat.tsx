@@ -393,6 +393,10 @@ function getStructuredContextNextAction(response: GeneralBotResponse) {
   return String(response.context?.next_action || '').toLowerCase();
 }
 
+function getContextCompanyName(response: GeneralBotResponse) {
+  return String(response.context?.entities?.company_name || '').trim();
+}
+
 function classifyInitialInput(value: string) {
   const normalized = value.trim();
   const lower = normalized.toLowerCase();
@@ -737,6 +741,7 @@ export default function AIAgentChat({
       const workflowState = getWorkflowStateFromResponse(data);
       const responseText = data.text || 'No response text returned from the workflow router.';
       const vendorName = getVendorDisplayName(data);
+      const contextCompanyName = getContextCompanyName(data);
       const tbmsVendor = getFirstTbmsVendor(data);
       const showContactForm = shouldShowContactForm(data);
       const shouldOpenContactSetup = forceVendorLookup && !tbmsVendor;
@@ -787,7 +792,7 @@ export default function AIAgentChat({
                 ? '/api/vendor-approval-workflow'
                 : workflowState.workflowApiPath,
           }),
-          companyName: prev.companyName || validVendorName || validUserCompanyName,
+          companyName: contextCompanyName || prev.companyName || validVendorName || validUserCompanyName,
           currentStep: 'initial'
         };
       });
