@@ -60,37 +60,6 @@ type GeneralBotResponse = {
   };
 };
 
-function isServerDrivenTbmsLookup(payload: GeneralBotResponse) {
-  const intent = String(payload.context?.intent || payload.intent || "").toLowerCase();
-  const nextAction = String(payload.context?.next_action || payload.next_action || "").toLowerCase();
-  return intent === "lookup" && nextAction === "tbms_lookup";
-}
-
-function extractTbmsLookupQuery(payload: GeneralBotResponse, fallbackText: string) {
-  const contextEntities = payload.context?.entities || {};
-  const companyName = String(contextEntities.company_name || payload.entities?.company_name || "").trim();
-  if (companyName) {
-    return companyName;
-  }
-
-  const tradeLicenseNumber = String(contextEntities.trade_license_number || payload.entities?.trade_license_number || "").trim();
-  if (tradeLicenseNumber) {
-    return tradeLicenseNumber;
-  }
-
-  const vatNumber = String(contextEntities.vat_number || payload.entities?.vat_number || "").trim();
-  if (vatNumber) {
-    return vatNumber;
-  }
-
-  const bankName = String(contextEntities.bank_name || payload.entities?.bank_name || "").trim();
-  if (bankName) {
-    return bankName;
-  }
-
-  return fallbackText;
-}
-
 function parseExpiryDateFromText(text: string) {
   const patterns = [
     /(?:Trade License Expiry(?: \(last on record\))?:?\s*)(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i,
@@ -170,70 +139,6 @@ function normalizeGeneralBotResponse(payload: GeneralBotResponse): GeneralBotRes
   };
 }
 
-async function fetchVendorLookupFallback(inputText: string, tbmsVendorLookupEndpoint: string) {
-  const trimmed = inputText.trim();
-  const isLicenseNumber = /^\d+$/.test(trimmed);
-
-  const payload = {
-    vendorName: isLicenseNumber ? "" : trimmed,
-    vendId: -1,
-    licenseNo: isLicenseNumber ? trimmed : "",
-    email: "",
-    statusId: -1,
-  };
-
-  const externalRes = await fetch(tbmsVendorLookupEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const rawResponse = await externalRes.text();
-  let parsedResponse: any;
-
-  try {
-    parsedResponse = JSON.parse(rawResponse);
-  } catch {
-    parsedResponse = {
-      ok: externalRes.ok,
-      status: externalRes.ok ? "completed" : "error",
-      text: rawResponse || "Vendor lookup returned a non-JSON response.",
-    };
-  }
-
-  if (!externalRes.ok) {
-    return {
-      ok: false,
-      status: "error",
-      text:
-        parsedResponse?.text ||
-        rawResponse ||
-        `Vendor lookup service returned HTTP ${externalRes.status}.`,
-      source: "tbms",
-      origin: "tbms",
-      source_type: "tbms",
-      routing: {
-        status: "error",
-        workflow_name: "GENERAL_CHAT_AGENT_ID",
-      },
-    };
-  }
-
-  return {
-    ...parsedResponse,
-    source: "tbms",
-    origin: "tbms",
-    source_type: "tbms",
-    status: parsedResponse?.status || "completed",
-    routing: {
-      status: "completed",
-      workflow_name: "GENERAL_CHAT_AGENT_ID",
-    },
-  };
-}
-
 export async function onRequestPost({ request, env }: { request: Request; env: PagesEnvBindings }) {
   try {
     const input = (await request.json()) as Record<string, unknown>;
@@ -250,9 +155,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
   };
 
     const GENERAL_BOT_ENDPOINT = env.GENERAL_BOT_ENDPOINT || "";
-    const TBMS_VENDOR_LOOKUP_ENDPOINT = env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
 
-    if (!GENERAL_BOT_ENDPOINT || !TBMS_VENDOR_LOOKUP_ENDPOINT) {
+    if (!GENERAL_BOT_ENDPOINT) {
       return json(
         {
           ok: false,
@@ -287,11 +191,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
           status: externalRes.ok ? "completed" : "error",
           text: rawResponse || "General bot returned a non-JSON response.",
         };
-      }
-
-      if (isServerDrivenTbmsLookup(parsedResponse)) {
-        const lookupQuery = extractTbmsLookupQuery(parsedResponse, inputText);
-        return json(await fetchVendorLookupFallback(lookupQuery, TBMS_VENDOR_LOOKUP_ENDPOINT));
       }
 
       return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);
