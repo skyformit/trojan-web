@@ -15,9 +15,6 @@ interface AIAgentChatProps {
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
-const ENABLE_LOCAL_ROUTING_HEURISTICS =
-  import.meta.env.VITE_ENABLE_LOCAL_ROUTING_HEURISTICS === 'true';
-
 type GeneralBotResponse = {
   ok?: boolean;
   status?: 'completed' | 'expired' | 'renewal_due' | string;
@@ -397,79 +394,6 @@ function getContextCompanyName(response: GeneralBotResponse) {
   return String(response.context?.entities?.company_name || '').trim();
 }
 
-function classifyInitialInput(value: string) {
-  const normalized = value.trim();
-  const lower = normalized.toLowerCase();
-  const singleTokenStopwords = new Set([
-    'name',
-    'company',
-    'vendor',
-    'trade',
-    'license',
-    'licence',
-    'number',
-    'no',
-    'id',
-    'email',
-    'mail',
-    'phone',
-    'mobile',
-  ]);
-
-  if (!normalized) {
-    return { intent: 'general_chat' as const, extracted: '', rule: 'empty_input' };
-  }
-
-  if (/^(hi|hello|hey|thanks|thank you|good morning|good evening|good afternoon)\b/.test(lower)) {
-    return { intent: 'general_chat' as const, extracted: '', rule: 'greeting' };
-  }
-
-  const explicitPatterns = [
-    /\b(my|our)\s+company\s+name\s+is\s+(.+)$/i,
-    /\b(company\s+name|company|vendor\s+name|vendor)\s*[:\-]?\s*(.+)$/i,
-    /\b(trade\s+license\s+number|trade\s+license\s+no|license\s+number|license\s+no|licence\s+number|licence\s+no)\s*[:\-]?\s*(.+)$/i,
-  ];
-
-  for (const pattern of explicitPatterns) {
-    const match = normalized.match(pattern);
-    if (match?.[2]) {
-      return {
-        intent: /trade\s+license|license|licence/i.test(match[1]) ? 'vendor_lookup' as const : 'vendor_lookup' as const,
-        extracted: match[2].trim(),
-        rule: 'explicit_lookup_phrase',
-      };
-    }
-  }
-
-  if (
-    /\b(company name|my company|our company|vendor name|vendor|trade license|license number|license no|licence number|licence no)\b/i.test(normalized)
-  ) {
-    return { intent: 'vendor_lookup' as const, extracted: normalized, rule: 'keyword_lookup' };
-  }
-
-  const words = normalized.split(/\s+/);
-  const looksLikeQuestion = /[?]/.test(normalized) || /^(what|how|why|when|where|who|can you|could you|please)\b/i.test(lower);
-  const mostlyAlpha = /^[A-Za-z0-9&().,\-\/\s]+$/.test(normalized);
-  const isLikelyGreeting = /(hi|hello|hey|thanks|thank you)/i.test(lower);
-
-  if (looksLikeQuestion || isLikelyGreeting) {
-    return { intent: 'general_chat' as const, extracted: '', rule: looksLikeQuestion ? 'question' : 'greeting' };
-  }
-
-  const standaloneNameLike =
-    mostlyAlpha &&
-    words.length <= 6 &&
-    /[A-Za-z]/.test(normalized) &&
-    !/[,:;?]/.test(normalized) &&
-    !(words.length === 1 && singleTokenStopwords.has(lower));
-
-  return {
-    intent: standaloneNameLike ? 'vendor_lookup' as const : 'general_chat' as const,
-    extracted: normalized,
-    rule: standaloneNameLike ? 'standalone_name_like' : 'not_name_like',
-  };
-}
-
 function shouldShowContactForm(response: GeneralBotResponse) {
   const sourceType = getStructuredSource(response);
   const responseType = getStructuredResponseType(response);
@@ -667,11 +591,6 @@ export default function AIAgentChat({
       return;
     }
 
-    const initialInputClassification =
-      ENABLE_LOCAL_ROUTING_HEURISTICS && registrationState.currentStep === 'initial'
-        ? classifyInitialInput(text)
-        : { intent: 'general_chat' as const, extracted: '', rule: 'llm_only' };
-
     if (!textToSend) {
       setInputText('');
     }
@@ -689,16 +608,12 @@ export default function AIAgentChat({
 
     // Handle bot logic processing based on state
     setTimeout(() => {
-      processAgentResponse(text, initialInputClassification);
+      processAgentResponse(text);
     }, 800);
   };
 
-  const processAgentResponse = async (
-    userText: string,
-    classification: { intent: 'vendor_lookup' | 'general_chat'; extracted: string }
-  ) => {
+  const processAgentResponse = async (userText: string) => {
     setIsRequestInProgress(true);
-    const forceVendorLookup = ENABLE_LOCAL_ROUTING_HEURISTICS && classification.intent === 'vendor_lookup';
 
     try {
       const response = await fetch('/api/invoke-general-bot', {
@@ -708,8 +623,7 @@ export default function AIAgentChat({
         text: userText,
         message: userText,
         prompt: userText,
-        intent: forceVendorLookup ? 'vendor_lookup' : 'general_chat',
-        extracted_subject: forceVendorLookup ? classification.extracted : '',
+        intent: 'general_chat',
         conversation_id: conversationId,
         context: lastConversationContextRef.current || undefined
       })
@@ -744,7 +658,6 @@ export default function AIAgentChat({
       const contextCompanyName = getContextCompanyName(data);
       const tbmsVendor = getFirstTbmsVendor(data);
       const showContactForm = shouldShowContactForm(data);
-      const shouldOpenContactSetup = forceVendorLookup && !tbmsVendor;
       const tbmsLifecycleStatus = tbmsVendor
         ? getVendorLifecycleStatus(
             String(tbmsVendor.expDate || ''),
@@ -757,16 +670,12 @@ export default function AIAgentChat({
           : tbmsLifecycleStatus === 'expired'
             ? 'vendor'
             : 'vendor'
-        : forceVendorLookup
-          ? 'vendor'
         : workflowState.workflowRoute;
       const finalWorkflowStatus = tbmsLifecycleStatus
         ? tbmsLifecycleStatus
-        : forceVendorLookup
-          ? 'completed'
         : workflowState.workflowStatus;
 
-      const shouldOpenContactPanel = showContactForm || shouldOpenContactSetup || (!tbmsVendor && finalWorkflowRoute !== 'general');
+      const shouldOpenContactPanel = showContactForm || (!tbmsVendor && finalWorkflowRoute !== 'general');
 
       setRegistrationState(prev => {
         const validVendorName = validateGuidedCompanyName(vendorName).valid ? vendorName : '';
@@ -781,16 +690,12 @@ export default function AIAgentChat({
               ? tbmsLifecycleStatus === 'renewal_due'
                 ? 'Renewal-Vendor-Approval-Workflow'
                 : 'TCG-Vendor-Approval-Workflow'
-              : forceVendorLookup
-                ? 'TCG-Vendor-Approval-Workflow'
-                : workflowState.workflowName,
+              : workflowState.workflowName,
             workflowApiPath: tbmsLifecycleStatus
               ? tbmsLifecycleStatus === 'renewal_due'
                 ? '/api/renewal-vendor-approval-workflow'
                 : '/api/vendor-approval-workflow'
-              : forceVendorLookup
-                ? '/api/vendor-approval-workflow'
-                : workflowState.workflowApiPath,
+              : workflowState.workflowApiPath,
           }),
           companyName: contextCompanyName || prev.companyName || validVendorName || validUserCompanyName,
           currentStep: 'initial'
@@ -818,7 +723,7 @@ export default function AIAgentChat({
           chamberNo: String(tbmsVendor.chamberNo || 'N/A'),
           businessActivity: String(tbmsVendor.tradeActivities || 'N/A'),
         });
-      } else if (forceVendorLookup || getStructuredSource(data) === 'tbms') {
+      } else if (getStructuredSource(data) === 'tbms') {
         setVendorLookupSummary(null);
       } else {
         setVendorLookupSummary(null);
@@ -835,7 +740,7 @@ export default function AIAgentChat({
       if (!tbmsVendor) {
         await streamChatMessage(
           setChatHistory,
-          forceVendorLookup || getStructuredSource(data) === 'tbms'
+          getStructuredSource(data) === 'tbms'
             ? `No vendor match found. Please enter the contact details below to continue.`
             : responseText,
           {
@@ -844,7 +749,7 @@ export default function AIAgentChat({
         );
       }
 
-      if (shouldOpenContactPanel) {
+      if (showContactForm || (!tbmsVendor && getStructuredSource(data) === 'tbms')) {
         setRegistrationState(prev => ({
           ...prev,
           currentStep: 'contact_info'

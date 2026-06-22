@@ -170,20 +170,6 @@ function normalizeGeneralBotResponse(payload: GeneralBotResponse): GeneralBotRes
   };
 }
 
-function looksLikeVendorLookupInput(value: string) {
-  const normalized = value.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  if (/^\d+$/.test(normalized)) {
-    return true;
-  }
-
-  const hasVendorKeyword = /\b(llc|l\.l\.c|ltd|limited|trading|company|corp|corporation|enterprise|est|fze|fzc)\b/i.test(normalized);
-  return hasVendorKeyword || normalized.split(/\s+/).length >= 2 || normalized.toLowerCase().includes("trade license");
-}
-
 async function fetchVendorLookupFallback(inputText: string) {
   const trimmed = inputText.trim();
   const isLicenseNumber = /^\d+$/.test(trimmed);
@@ -372,10 +358,6 @@ app.post("/api/invoke-general-bot", async (req, res) => {
       req.query?.text ||
       req.query?.message ||
       "";
-    const explicitIntent = String(req.body?.intent || req.query?.intent || "").toLowerCase();
-    const forceVendorLookup = explicitIntent === "vendor_lookup";
-    const localHeuristicsEnabled = process.env.ENABLE_LOCAL_ROUTING_HEURISTICS === "true";
-    const useVendorFallback = localHeuristicsEnabled && looksLikeVendorLookupInput(inputText);
 
     const payload = {
       text: inputText,
@@ -389,11 +371,6 @@ app.post("/api/invoke-general-bot", async (req, res) => {
         req.query?.conversationId ||
         "",
     };
-
-    if (forceVendorLookup) {
-      const vendorFallback = await fetchVendorLookupFallback(inputText);
-      return res.status(200).json(vendorFallback);
-    }
 
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), 15000);
@@ -409,12 +386,6 @@ app.post("/api/invoke-general-bot", async (req, res) => {
         signal: controller.signal,
       });
     } catch (fetchError: any) {
-      if (forceVendorLookup || useVendorFallback) {
-        const vendorFallback = await fetchVendorLookupFallback(inputText);
-        clearTimeout(timeoutHandle);
-        return res.status(200).json(vendorFallback);
-      }
-
       clearTimeout(timeoutHandle);
       throw fetchError;
     } finally {
@@ -432,14 +403,6 @@ app.post("/api/invoke-general-bot", async (req, res) => {
         status: externalRes.ok ? "completed" : "error",
         text: rawResponse || "General bot returned a non-JSON response.",
       };
-    }
-
-    if (
-      useVendorFallback &&
-      (parsedResponse?.ok === false || parsedResponse?.error?.code === "response_parse_error")
-    ) {
-      const vendorFallback = await fetchVendorLookupFallback(inputText);
-      return res.status(200).json(vendorFallback);
     }
 
     return res.status(externalRes.status).json(normalizeGeneralBotResponse(parsedResponse));

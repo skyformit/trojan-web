@@ -170,20 +170,6 @@ function normalizeGeneralBotResponse(payload: GeneralBotResponse): GeneralBotRes
   };
 }
 
-function looksLikeVendorLookupInput(value: string) {
-  const normalized = value.trim();
-  if (!normalized) {
-    return false;
-  }
-
-  if (/^\d+$/.test(normalized)) {
-    return true;
-  }
-
-  const hasVendorKeyword = /\b(llc|l\.l\.c|ltd|limited|trading|company|corp|corporation|enterprise|est|fze|fzc)\b/i.test(normalized);
-  return hasVendorKeyword || normalized.split(/\s+/).length >= 2 || normalized.toLowerCase().includes("trade license");
-}
-
 async function fetchVendorLookupFallback(inputText: string, tbmsVendorLookupEndpoint: string) {
   const trimmed = inputText.trim();
   const isLicenseNumber = /^\d+$/.test(trimmed);
@@ -235,8 +221,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
     const input = (await request.json()) as Record<string, unknown>;
     const inputText =
       String(input?.text || input?.message || input?.prompt || input?.input || "").trim();
-    const explicitIntent = String(input?.intent || "").toLowerCase();
-    const forceVendorLookup = explicitIntent === "vendor_lookup";
 
   const payload = {
     text: inputText,
@@ -249,8 +233,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
 
     const GENERAL_BOT_ENDPOINT = env.GENERAL_BOT_ENDPOINT || "";
     const TBMS_VENDOR_LOOKUP_ENDPOINT = env.TBMS_VENDOR_LOOKUP_ENDPOINT || "";
-    const localHeuristicsEnabled = env.ENABLE_LOCAL_ROUTING_HEURISTICS === "true";
-    const useVendorFallback = localHeuristicsEnabled && looksLikeVendorLookupInput(inputText);
 
     if (!GENERAL_BOT_ENDPOINT || !TBMS_VENDOR_LOOKUP_ENDPOINT) {
       return json(
@@ -261,10 +243,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
         },
         500
       );
-    }
-
-    if (forceVendorLookup) {
-      return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
     }
 
     const controller = new AbortController();
@@ -293,13 +271,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
         };
       }
 
-      if (
-        useVendorFallback &&
-        (parsedResponse?.ok === false || parsedResponse?.error?.code === "response_parse_error")
-      ) {
-        return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
-      }
-
       if (isServerDrivenTbmsLookup(parsedResponse)) {
         const lookupQuery = extractTbmsLookupQuery(parsedResponse, inputText);
         return json(await fetchVendorLookupFallback(lookupQuery, TBMS_VENDOR_LOOKUP_ENDPOINT));
@@ -307,10 +278,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
 
       return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);
     } catch (error: any) {
-      if (forceVendorLookup || useVendorFallback) {
-        return json(await fetchVendorLookupFallback(inputText, TBMS_VENDOR_LOOKUP_ENDPOINT));
-      }
-
       return json(
         {
           ok: false,

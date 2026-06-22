@@ -14,7 +14,6 @@ export type GuidedOnboardingQuestion = {
 };
 
 export const GUIDED_ONBOARDING_CONFIG = {
-  enabledFlag: 'VITE_ENABLE_GUIDED_ONBOARDING_FLOW',
   triggers: [
     /\bonboard(?:ing)?\b/i,
     /\bnew\s+supplier\b/i,
