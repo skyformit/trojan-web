@@ -203,12 +203,30 @@ async function fetchVendorLookupFallback(inputText: string, tbmsVendorLookupEndp
     };
   }
 
+  if (!externalRes.ok) {
+    return {
+      ok: false,
+      status: "error",
+      text:
+        parsedResponse?.text ||
+        rawResponse ||
+        `Vendor lookup service returned HTTP ${externalRes.status}.`,
+      source: "tbms",
+      origin: "tbms",
+      source_type: "tbms",
+      routing: {
+        status: "error",
+        workflow_name: "GENERAL_CHAT_AGENT_ID",
+      },
+    };
+  }
+
   return {
     ...parsedResponse,
     source: "tbms",
     origin: "tbms",
     source_type: "tbms",
-    status: "completed",
+    status: parsedResponse?.status || "completed",
     routing: {
       status: "completed",
       workflow_name: "GENERAL_CHAT_AGENT_ID",
