@@ -449,6 +449,40 @@ function shouldShowContactForm(response: GeneralBotResponse) {
   );
 }
 
+function getNextStepFromResponse(
+  response: GeneralBotResponse,
+  previousStep: SupplierRegistrationState['currentStep']
+): SupplierRegistrationState['currentStep'] {
+  if (shouldShowContactForm(response)) {
+    return 'contact_info';
+  }
+
+  const contextIntent = getStructuredContextIntent(response);
+  const contextNextAction = getStructuredContextNextAction(response);
+  const documentType = String(response.context?.document_type || '').trim().toLowerCase();
+
+  const shouldOpenDocumentUpload =
+    contextIntent === 'document' ||
+    contextNextAction === 'document_review' ||
+    documentType === 'trade' ||
+    documentType === 'vat' ||
+    documentType === 'bank';
+
+  if (shouldOpenDocumentUpload) {
+    if (documentType === 'vat') {
+      return 'vat_upload';
+    }
+
+    if (documentType === 'bank') {
+      return 'bank_document_upload';
+    }
+
+    return 'trade_license_upload';
+  }
+
+  return previousStep;
+}
+
 function validateContactInfo(name: string, email: string, phone: string): ContactValidationErrors {
   const errors: ContactValidationErrors = {};
   const trimmedName = name.trim();
@@ -691,6 +725,7 @@ export default function AIAgentChat({
       setRegistrationState(prev => {
         const validVendorName = validateGuidedCompanyName(vendorName).valid ? vendorName : '';
         const validUserCompanyName = validateGuidedCompanyName(userText).valid ? userText : '';
+        const nextStep = getNextStepFromResponse(data, prev.currentStep);
 
         return {
           ...prev,
@@ -709,7 +744,7 @@ export default function AIAgentChat({
               : workflowState.workflowApiPath,
           }),
           companyName: contextCompanyName || prev.companyName || validVendorName || validUserCompanyName,
-          currentStep: 'initial'
+          currentStep: nextStep
         };
       });
 

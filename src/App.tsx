@@ -370,6 +370,10 @@ export default function App() {
           return 'The uploaded document appears to be expired.';
         }
 
+        if (normalized.includes('fraud risk') || normalized.includes('plausibility score') || normalized.includes('gpt review')) {
+          return 'The document authenticity check did not reach the required confidence level.';
+        }
+
         if (normalized.includes('document type')) {
           return 'The uploaded document does not match the current step in the onboarding flow.';
         }
