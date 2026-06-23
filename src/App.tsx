@@ -77,6 +77,10 @@ function companyNamesMatch(left: string, right: string) {
   return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 }
 
+function getBackendCompanyMatch(analyzeData: any) {
+  return analyzeData?.company_match || analyzeData?.rawResponse?.company_match || null;
+}
+
 function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
   const rawResults = analyzeData?.results || analyzeData?.rawResponse?.results || {};
   const normalized = analyzeData?.extractedData || {};
@@ -243,15 +247,26 @@ export default function App() {
       const extracted = mergeOcrExtraction(analyzeData, type);
       console.log("OCR Extracted values:", extracted);
       const documentAcceptance = analyzeData.documentAcceptance || analyzeData.rawResponse?.document_acceptance || null;
+      const backendCompanyMatch = getBackendCompanyMatch(analyzeData);
       const ocrResults = analyzeData.results || analyzeData.rawResponse?.results || {};
       const enteredCompanyName = registrationState.companyName || '';
       const extractedCompanyName = getDisplayOcrName(extracted);
-      const companyNameAligned =
-        !enteredCompanyName ||
-        !extractedCompanyName ||
-        companyNamesMatch(enteredCompanyName, extractedCompanyName);
-      const companyMismatchReason = !companyNameAligned
-        ? `Company name mismatch. Entered: "${enteredCompanyName}". OCR: "${extractedCompanyName}".`
+      const backendCompanyMatchState = backendCompanyMatch
+        ? String(backendCompanyMatch.match_status || '').toLowerCase()
+        : '';
+      const companyMatchState = backendCompanyMatchState || (
+        (!enteredCompanyName ||
+          !extractedCompanyName ||
+          companyNamesMatch(enteredCompanyName, extractedCompanyName))
+          ? 'exact'
+          : 'mismatch'
+      );
+      const companyMatches = companyMatchState === 'exact' || companyMatchState === 'close';
+      const companyNeedsReview = companyMatchState === 'close';
+      const companyMismatchReason = companyMatchState === 'mismatch'
+        ? backendCompanyMatch
+          ? `Company name mismatch. Requested: "${backendCompanyMatch.requested_company_name || enteredCompanyName}". Matched: "${backendCompanyMatch.matched_company_name || extractedCompanyName}".`
+          : `Company name mismatch. Entered: "${enteredCompanyName}". OCR: "${extractedCompanyName}".`
         : '';
       const acceptanceStatus = String(documentAcceptance?.status || (documentAcceptance?.acceptable ? 'approved' : '')).toLowerCase();
       const expectedDocumentType = getExpectedAcceptanceDocumentType(type);
@@ -261,23 +276,37 @@ export default function App() {
         ? `Please upload the correct ${expectedDocumentType.toUpperCase()} document for this step.`
         : '';
       const decisionLabel =
-        companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
-          ? 'APPROVED'
-          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
+        companyMatchState === 'mismatch'
+          ? 'REJECTED'
+          : !documentTypeMatches
+            ? 'REJECTED'
+            : companyNeedsReview || acceptanceStatus === 'review'
             ? 'REVIEW'
+            : companyMatches && acceptanceStatus === 'approved'
+          ? 'APPROVED'
             : 'REJECTED';
-      const effectiveDocumentAcceptance = companyNameAligned && documentTypeMatches
+      const effectiveDocumentAcceptance = companyMatchState === 'exact' && documentTypeMatches
         ? documentAcceptance
-        : {
-            ...(documentAcceptance || {}),
-            status: 'rejected',
-            acceptable: false,
-            reasons: [
-              ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
-              companyMismatchReason,
-              documentTypeMismatchReason,
-            ].filter(Boolean),
-          };
+        : companyNeedsReview && documentTypeMatches
+          ? {
+              ...(documentAcceptance || {}),
+              status: 'review',
+              acceptable: true,
+              reasons: [
+                ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
+                `Company match is close. Requested: "${backendCompanyMatch?.requested_company_name || enteredCompanyName}". Matched: "${backendCompanyMatch?.matched_company_name || extractedCompanyName}".`,
+              ].filter(Boolean),
+            }
+          : {
+              ...(documentAcceptance || {}),
+              status: 'rejected',
+              acceptable: false,
+              reasons: [
+                ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
+                companyMismatchReason,
+                documentTypeMismatchReason,
+              ].filter(Boolean),
+            };
       const acceptanceReasonTexts = Array.isArray(effectiveDocumentAcceptance?.reasons)
         ? effectiveDocumentAcceptance.reasons.map(reason => String(reason).toLowerCase())
         : [];
@@ -286,17 +315,23 @@ export default function App() {
         acceptanceReasonTexts.some(reason => reason.includes('expired')) ||
         Boolean(effectiveDocumentAcceptance?.expiry_date && new Date(effectiveDocumentAcceptance.expiry_date).getTime() < Date.now());
       const effectiveFinalStatus: DocumentVerification['status'] =
-        companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
-          ? 'verified'
-          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
+        companyMatchState === 'mismatch'
+          ? 'failed'
+          : !documentTypeMatches
+            ? 'failed'
+            : companyNeedsReview || acceptanceStatus === 'review'
             ? 'review'
+            : companyMatches && acceptanceStatus === 'approved'
+          ? 'verified'
             : 'failed';
       const friendlyRejectionReason = isDocumentExpired
         ? 'Your document appears to be expired.'
         : !documentTypeMatches
         ? documentTypeMismatchReason
-        : !companyNameAligned
+        : companyMatchState === 'mismatch'
           ? companyMismatchReason
+          : companyNeedsReview
+            ? `Company name is close to the requested name. Please review and confirm the details.`
           : 'We could not approve this document because one or more checks did not pass.';
       const friendlyNextStep = 'Please upload a clearer or corrected document so we can continue.';
 
@@ -326,7 +361,7 @@ export default function App() {
                 documentTypeMatches
                   ? 'Document type matched the active workflow step.'
                   : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
-                !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
+                !companyMatches ? `Company name mismatch: ${companyMismatchReason}` : companyNeedsReview ? 'Company name close match sent for review.' : 'Company name aligned.',
                 ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
                   ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
                   : [])
@@ -390,7 +425,7 @@ export default function App() {
             documentTypeMatches
               ? 'Document type matched the active workflow step.'
               : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
-            !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
+            !companyMatches ? `Company name mismatch: ${companyMismatchReason}` : companyNeedsReview ? 'Company name close match sent for review.' : 'Company name aligned.',
             ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
               ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
               : []),
@@ -445,7 +480,11 @@ Next Step: ${
                 : "All requested parameters are verified! Please review the score card on the right, and submit your registration profile."
             }`
           : effectiveFinalStatus === 'review'
-            ? `⚠ **Document Sent for Review**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Status**\nYour document is currently under expert review.\n\n**Next Step**\nWe will continue once the acceptance rules are resolved.`
+            ? `[[DOCUMENT_REVIEW]]
+Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
+OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Review Note: Company name is a close match and needs a quick review before approval.
+Next Step: We will continue once the review is complete.`
             : `[[DOCUMENT_REJECTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"

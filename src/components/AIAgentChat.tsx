@@ -908,6 +908,58 @@ We will verify your company's credentials after the upload.`
   const [dragActive, setDragActive] = useState(false);
 
   const renderFormattedText = (text: string) => {
+    if (text.startsWith('[[DOCUMENT_REVIEW]]')) {
+      const rows = text
+        .replace('[[DOCUMENT_REVIEW]]', '')
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const rowMap = rows.reduce<Record<string, string>>((acc, line) => {
+        const [label, ...valueParts] = line.split(':');
+        if (!label || valueParts.length === 0) return acc;
+        acc[label.trim()] = valueParts.join(':').trim();
+        return acc;
+      }, {});
+
+      return (
+        <div className="space-y-3">
+          <div className="font-bold text-amber-900 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-amber-500" />
+            <span>Document Sent for Review</span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-amber-200 bg-amber-50">
+            <div className="grid grid-cols-2 bg-amber-100 text-[10px] uppercase tracking-widest text-amber-700 font-bold border-b border-amber-200">
+              <div className="px-3 py-2 border-r border-amber-200">Field</div>
+              <div className="px-3 py-2">Value</div>
+            </div>
+
+            {[
+              ['Document Type', rowMap['Document Type'] || 'N/A'],
+              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
+              ['Review Note', rowMap['Review Note'] || 'Company name is a close match.'],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-2 text-xs border-b border-amber-100 last:border-b-0">
+                <div className="px-3 py-2 font-semibold text-amber-900 bg-amber-50 border-r border-amber-100">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-slate-800 break-words bg-amber-50">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg bg-amber-100 border border-amber-200 px-3 py-2 text-xs text-slate-800">
+            <span className="font-bold text-amber-700">Next Step:</span>{' '}
+            {rowMap['Next Step'] || 'We will continue once the review is complete.'}
+          </div>
+        </div>
+      );
+    }
+
     if (text.startsWith('[[DOCUMENT_REJECTED]]')) {
       const rows = text
         .replace('[[DOCUMENT_REJECTED]]', '')
