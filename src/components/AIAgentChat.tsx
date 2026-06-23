@@ -922,6 +922,10 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
+      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
+        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
+        .replace(/^Approved by backend rules$/i, 'Approved')
+        .replace(/^Approved by Expert Decision$/i, 'Approved');
 
       return (
         <div className="space-y-3">
@@ -974,6 +978,10 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
+      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
+        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
+        .replace(/^Approved by backend rules$/i, 'Approved')
+        .replace(/^Approved by Expert Decision$/i, 'Approved');
 
       return (
         <div className="space-y-3">
@@ -1026,6 +1034,10 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
+      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
+        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
+        .replace(/^Approved by backend rules$/i, 'Approved')
+        .replace(/^Approved by Expert Decision$/i, 'Approved');
 
       return (
         <div className="space-y-3">
@@ -1041,9 +1053,7 @@ We will verify your company's credentials after the upload.`
             </div>
 
             {[
-              ['Document Type', rowMap['Document Type'] || 'N/A'],
-              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
-              ['Acceptance Status', rowMap['Acceptance Status'] || 'Approved'],
+              ['Acceptance Status', acceptanceStatus],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
                 <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">

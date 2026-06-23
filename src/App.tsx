@@ -471,7 +471,7 @@ export default function App() {
           ? `[[DOCUMENT_ACCEPTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Acceptance Status: Approved by Expert Intelligent rules
+Acceptance Status: Approved
 Next Step: ${
               type === 'trade_license'
                 ? "Let's move onto Step 3. Please provide your company's VAT Certificate."

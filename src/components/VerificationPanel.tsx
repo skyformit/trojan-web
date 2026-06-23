@@ -488,48 +488,6 @@ export default function VerificationPanel({
               )}
             </div>
 
-            {doc.documentAcceptance && (
-              <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Document Acceptance</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Expert Decision</h5>
-                  </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                    doc.documentAcceptance.status === 'approved'
-                      ? 'text-emerald-700 bg-emerald-100 border-emerald-200'
-                      : doc.documentAcceptance.status === 'review'
-                        ? 'text-amber-700 bg-amber-100 border-amber-200'
-                        : 'text-rose-700 bg-rose-100 border-rose-200'
-                  }`}>
-                    {doc.documentAcceptance.status || 'unknown'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Score</span>
-                    <span className="font-bold text-slate-800">{doc.documentAcceptance.score ?? 'N/A'}</span>
-                  </div>
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Expired</span>
-                    <span className={`font-bold ${doc.documentAcceptance.is_expired ? 'text-rose-700' : 'text-emerald-700'}`}>
-                      {doc.documentAcceptance.is_expired ? 'Yes' : 'No'}
-                    </span>
-                  </div>
-                </div>
-                <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Review Summary</span>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    {doc.documentAcceptance.status === 'approved'
-                      ? 'After review, your document was accepted and is ready for the next step in the onboarding process.'
-                      : doc.documentAcceptance.status === 'review'
-                        ? 'After review, your document has been sent for a closer check. We will continue once that review is complete.'
-                        : 'After review, your document could not be approved at this time. Please upload a corrected copy to continue.'}
-                  </p>
-                </div>
-              </div>
-            )}
-
           </div>
         )}
 
