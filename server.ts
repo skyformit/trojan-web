@@ -2,10 +2,12 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import multer from "multer";
 
 dotenv.config();
 
 const app = express();
+const multipartUpload = multer({ storage: multer.memoryStorage() });
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "127.0.0.1";
 const GENERAL_BOT_ENDPOINT = process.env.GENERAL_BOT_ENDPOINT || "";
@@ -113,14 +115,16 @@ function getResultValue(
   return "";
 }
 
-function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
-  const match = fileBase64.match(/^data:([^;]+);base64,/);
-  return match?.[1] || fallbackMimeType || "application/octet-stream";
-}
+function parseMaybeJson(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return value ?? null;
+  }
 
-function getBase64Payload(fileBase64: string) {
-  const separatorIndex = fileBase64.indexOf(",");
-  return separatorIndex >= 0 ? fileBase64.slice(separatorIndex + 1) : fileBase64;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 function parseExpiryDateFromText(text: string) {
@@ -290,7 +294,6 @@ function normalizeValidationResponse(
   };
 }
 
-// Enable payload handling for rich base64 image uploads
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -404,10 +407,24 @@ app.post("/api/invoke-general-bot", async (req, res) => {
 });
 
 // REST API: Automated Document Extraction and Pre-validation
-app.post("/api/analyze-document", async (req, res) => {
+app.post("/api/analyze-document", multipartUpload.single("file"), async (req, res) => {
   try {
     const startedAt = performance.now();
-    const { documentType, fileBase64, mimeType, isPresetSample, companyName } = req.body;
+    const contentType = String(req.headers["content-type"] || "");
+    if (!contentType.includes("multipart/form-data")) {
+      return res.status(400).json({ error: "multipart/form-data is required" });
+    }
+
+    const fields = req.body as Record<string, string | undefined>;
+    const documentType = String(fields?.documentType || "").trim();
+    const mimeType = String(fields?.mimeType || "").trim();
+    const isPresetSample = parseMaybeJson(fields?.isPresetSample);
+    const companyName = String(fields?.companyName || fields?.company_name || "").trim();
+    const conversationId = String(fields?.conversation_id || fields?.conversationId || "").trim();
+    const tradeLicenseNumber = String(fields?.trade_license_number || fields?.tradeLicenseNumber || "").trim();
+    const documentContext = parseMaybeJson(fields?.document_context || fields?.documentContext || null);
+    const contextHint = parseMaybeJson(fields?.context_hint || fields?.contextHint || null);
+    const uploadedFile = req.file;
 
     if (!documentType) {
       return res.status(400).json({ error: "documentType parameter is required" });
@@ -418,24 +435,58 @@ app.post("/api/analyze-document", async (req, res) => {
       return res.status(400).json({ error: "Unsupported documentType parameter" });
     }
 
-    if (!fileBase64) {
-      return res.status(400).json({ error: "fileBase64 payload is required" });
+    if (!uploadedFile?.buffer) {
+      return res.status(400).json({
+        error: "file payload is required",
+      });
     }
 
     console.log(
-      `Analyzing document of type: ${documentType}. Presetsample: ${isPresetSample ? JSON.stringify(isPresetSample) : "none"}. CompanyName: ${companyName}`
+      `Analyzing document of type: ${documentType}. Presetsample: ${isPresetSample ? JSON.stringify(isPresetSample) : "none"}. CompanyName: ${companyName}. ConversationId: ${conversationId}. TradeLicenseNumber: ${tradeLicenseNumber}. Multipart: true.`
     );
 
-    const mimeTypeValue = getMimeTypeFromDataUrl(fileBase64, mimeType);
-    const base64Payload = getBase64Payload(fileBase64);
-    const fileBuffer = Buffer.from(base64Payload, "base64");
-    const fileBlob = new Blob([fileBuffer], { type: mimeTypeValue });
+    const mimeTypeValue = uploadedFile.mimetype || mimeType || "application/octet-stream";
+    const resolvedFileBuffer = uploadedFile.buffer;
+    const fileBlob = new Blob([resolvedFileBuffer], { type: mimeTypeValue });
     const formData = new FormData();
     formData.append(
       "file",
       fileBlob,
       `${documentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
     );
+    formData.append("documentType", documentType);
+    if (companyName) {
+      formData.append("companyName", companyName);
+      formData.append("company_name", companyName);
+    }
+    if (conversationId) {
+      formData.append("conversation_id", conversationId);
+    }
+    if (tradeLicenseNumber) {
+      formData.append("trade_license_number", tradeLicenseNumber);
+    }
+    if (documentContext !== null && documentContext !== undefined) {
+      formData.append("document_context", typeof documentContext === "string" ? documentContext : JSON.stringify(documentContext));
+    }
+    if (contextHint !== null && contextHint !== undefined) {
+      formData.append("context_hint", typeof contextHint === "string" ? contextHint : JSON.stringify(contextHint));
+    }
+    if (isPresetSample !== null && isPresetSample !== undefined) {
+      formData.append("isPresetSample", typeof isPresetSample === "string" ? isPresetSample : JSON.stringify(isPresetSample));
+    }
+    formData.append("mimeType", mimeTypeValue);
+
+    console.log("Forwarding multipart payload to Azure validator:", {
+      documentType,
+      companyName,
+      conversationId,
+      tradeLicenseNumber,
+      hasDocumentContext: documentContext !== null && documentContext !== undefined,
+      hasContextHint: contextHint !== null && contextHint !== undefined,
+      isPresetSample: isPresetSample !== null && isPresetSample !== undefined,
+      mimeType: mimeTypeValue,
+      fileName: uploadedFile.originalname,
+    });
 
     const externalRes = await fetch(validationConfig.url, {
       method: "POST",
@@ -489,6 +540,13 @@ app.post("/api/analyze-document", async (req, res) => {
         companyName: extractedData.companyName || extractedData.tradeName || tradeName,
       },
       rawResponse: parsedResponse,
+      requestContext: {
+        company_name: companyName || null,
+        conversation_id: conversationId || null,
+        trade_license_number: tradeLicenseNumber || null,
+        document_context: documentContext,
+        context_hint: contextHint,
+      },
     });
   } catch (error: any) {
     console.error("Error in /api/analyze-document:", error);

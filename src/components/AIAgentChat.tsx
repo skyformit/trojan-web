@@ -10,7 +10,18 @@ import {
 interface AIAgentChatProps {
   registrationState: SupplierRegistrationState;
   setRegistrationState: React.Dispatch<React.SetStateAction<SupplierRegistrationState>>;
-  onAnalyzeDocument: (type: 'trade_license' | 'vat_certificate' | 'bank_document', fileBase64: string | null, mimeType: string, isPresetSample?: { companyName: string }) => Promise<void>;
+  onAnalyzeDocument: (
+    type: 'trade_license' | 'vat_certificate' | 'bank_document',
+    file: File | null,
+    isPresetSample?: { companyName: string },
+    uploadContext?: {
+      companyName?: string;
+      conversationId?: string | null;
+      tradeLicenseNumber?: string;
+      documentContext?: Record<string, unknown> | string | null;
+      contextHint?: Record<string, unknown> | string | null;
+    }
+  ) => Promise<void>;
   chatHistory: ChatMessage[];
   setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
@@ -851,56 +862,40 @@ We will verify your company's credentials after the upload.`
     }]);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = event.target?.result as string;
+      setChatHistory(prev => [...prev, {
+        id: 'upload-start-' + Date.now(),
+        sender: 'system',
+        text: `We have received your ${documentLabel}. Starting the review now...`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
 
-        try {
-          setChatHistory(prev => [...prev, {
-            id: 'upload-start-' + Date.now(),
-            sender: 'system',
-            text: `We have received your ${documentLabel}. Starting the review now...`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-
-          await onAnalyzeDocument(
-            type,
-            base64,
-            file.type,
-            { companyName: registrationState.companyName || 'AeroTech Solutions Ltd' }
-          );
-        } catch (error: any) {
-          setChatHistory(prev => [...prev, {
-            id: 'error-' + Date.now(),
-            sender: 'agent',
-            text: `Validation failed: ${error?.message || 'Unknown error'}.`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }]);
-        } finally {
-          setIsUploading(false);
+      await onAnalyzeDocument(
+        type,
+        file,
+        { companyName: registrationState.companyName || 'AeroTech Solutions Ltd' },
+        {
+          companyName: registrationState.companyName || 'AeroTech Solutions Ltd',
+          conversationId,
+          tradeLicenseNumber: registrationState.tradeLicenseNumber || '',
+          documentContext: {
+            documentType: type,
+            currentStep: registrationState.currentStep,
+            workflowRoute: registrationState.workflowRoute,
+            workflowName: registrationState.workflowName,
+          },
+          contextHint: lastConversationContextRef.current || undefined,
         }
-      };
-
-      reader.onerror = () => {
-        setIsUploading(false);
-        setChatHistory(prev => [...prev, {
-          id: 'error-' + Date.now(),
-          sender: 'agent',
-          text: `Error reading "${file.name}". Please retry.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }]);
-      };
-      
-      reader.readAsDataURL(file);
+      );
     } catch (err: any) {
       console.error(err);
-      setIsUploading(false);
       setChatHistory(prev => [...prev, {
         id: 'error-' + Date.now(),
         sender: 'agent',
         text: `Error uploading document: ${err.message || 'File processing failed'}. Please retry.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -978,16 +973,22 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
-      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
-        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
-        .replace(/^Approved by backend rules$/i, 'Approved')
-        .replace(/^Approved by Expert Decision$/i, 'Approved');
+      const rejectionSummary = rowMap['Rejection Summary'] || rowMap['Reason'] || 'This document could not be approved.';
+      const normalizedSummary = rejectionSummary.toLowerCase();
+      const rejectionLabel = normalizedSummary.includes('expired')
+        ? 'Document Expired'
+        : normalizedSummary.includes('company name mismatch') || normalizedSummary.includes('does not match')
+          ? 'Company Name Mismatch'
+          : normalizedSummary.includes('document type')
+            ? 'Incorrect Document Type'
+            : 'Verification Failed';
 
       return (
         <div className="space-y-3">
           <div className="font-bold text-slate-900 flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-500" />
             <span>Document Rejected</span>
+            <span className="text-[10px] uppercase tracking-widest text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">{rejectionLabel}</span>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -997,7 +998,7 @@ We will verify your company's credentials after the upload.`
             </div>
 
             {[
-              ['Reason', rowMap['Reason'] || 'This document could not be approved.'],
+              ['Rejection Summary', rejectionSummary],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
                 <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
@@ -1017,7 +1018,6 @@ We will verify your company's credentials after the upload.`
         </div>
       );
     }
-
     if (text.startsWith('[[DOCUMENT_ACCEPTED]]')) {
       const rows = text
         .replace('[[DOCUMENT_ACCEPTED]]', '')

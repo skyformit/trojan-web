@@ -36,6 +36,31 @@ export default function VerificationPanel({
 
   const formatMissingFieldLabels = (fields?: string[]) => (fields || []).map(formatMissingFieldLabel);
 
+  const formatAcceptanceValue = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(', ') : 'N/A';
+    }
+
+    if (value === true) return 'Yes';
+    if (value === false) return 'No';
+    if (value === null || value === undefined || value === '') return 'N/A';
+    return String(value);
+  };
+
+  const renderAcceptanceBadge = (status?: string) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'approved') {
+      return <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Approved</span>;
+    }
+    if (normalized === 'review') {
+      return <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Review</span>;
+    }
+    if (normalized === 'rejected') {
+      return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Rejected</span>;
+    }
+    return <span className="text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Unknown</span>;
+  };
+
   const getDocumentSummaryValue = (doc: DocumentVerification) => {
     if (doc.type === 'bank_document') {
       return (
@@ -487,6 +512,51 @@ export default function VerificationPanel({
                 </div>
               )}
             </div>
+
+            {doc.documentAcceptance && (
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Document Acceptance</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Expert Decision</h5>
+                  </div>
+                  {renderAcceptanceBadge(doc.documentAcceptance.status)}
+                </div>
+
+                <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
+                  <div className="px-3 py-2 border-r border-slate-200">Field</div>
+                  <div className="px-3 py-2">Value</div>
+                </div>
+
+                {[
+                  ['Document Type', formatAcceptanceValue(doc.documentAcceptance.document_type)],
+                  ['Status', formatAcceptanceValue(doc.documentAcceptance.status)],
+                  ['Score', formatAcceptanceValue(doc.documentAcceptance.score)],
+                  ['Missing Fields', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
+                  ['Reasons', formatAcceptanceValue(doc.documentAcceptance.reasons)],
+                  ['Expiry Date', formatAcceptanceValue(doc.documentAcceptance.expiry_date)],
+                  ['Expired', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
+                  ['Acceptable', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
+                ].map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
+                    <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
+                      {label}
+                    </div>
+                    <div className="px-3 py-2 text-slate-800 break-words">
+                      {label === 'Reasons' && Array.isArray(doc.documentAcceptance?.reasons) && doc.documentAcceptance.reasons.length > 0 ? (
+                        <ul className="space-y-1 list-disc list-inside">
+                          {doc.documentAcceptance.reasons.map((reason, index) => (
+                            <li key={`${reason}-${index}`}>{reason}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        value
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
           </div>
         )}

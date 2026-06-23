@@ -1,8 +1,6 @@
 import {
   DocumentType,
   AzureValidationResponse,
-  getBase64Payload,
-  getMimeTypeFromDataUrl,
   getValidationEndpoints,
   normalizeValidationResponse,
   PagesEnvBindings,
@@ -15,16 +13,16 @@ type ExpertReview = {
   reasoning: string;
 };
 
-function toFileBuffer(fileBase64: string) {
-  const base64Payload = getBase64Payload(fileBase64);
-  const binary = atob(base64Payload);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
+function parseMaybeJson(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.trim()) {
+    return value ?? null;
   }
 
-  return bytes;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 function getResultValue(
@@ -100,11 +98,21 @@ function buildFallbackExpertReview(
 export async function onRequestPost({ request, env }: { request: Request; env: PagesEnvBindings }) {
   try {
     const startedAt = performance.now();
-    const { documentType, fileBase64, mimeType } = (await request.json()) as {
-      documentType?: string;
-      fileBase64?: string;
-      mimeType?: string;
-    };
+    const contentType = request.headers.get("content-type") || "";
+    if (!contentType.includes("multipart/form-data")) {
+      return Response.json({ error: "multipart/form-data is required" }, { status: 400 });
+    }
+
+    const requestFormData = await request.formData();
+    const documentType = String(requestFormData.get("documentType") || "").trim();
+    const companyName = String(requestFormData.get("companyName") || requestFormData.get("company_name") || "").trim();
+    const conversationId = String(requestFormData.get("conversation_id") || requestFormData.get("conversationId") || "").trim();
+    const tradeLicenseNumber = String(requestFormData.get("trade_license_number") || requestFormData.get("tradeLicenseNumber") || "").trim();
+    const documentContext = parseMaybeJson(requestFormData.get("document_context") || requestFormData.get("documentContext"));
+    const contextHint = parseMaybeJson(requestFormData.get("context_hint") || requestFormData.get("contextHint"));
+    const isPresetSample = parseMaybeJson(requestFormData.get("isPresetSample"));
+    const mimeType = String(requestFormData.get("mimeType") || "").trim();
+    const file = requestFormData.get("file");
 
     if (!documentType) {
       return Response.json({ error: "documentType parameter is required" }, { status: 400 });
@@ -119,23 +127,56 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       return Response.json({ error: "Validation endpoint is not configured." }, { status: 500 });
     }
 
-    if (!fileBase64) {
-      return Response.json({ error: "fileBase64 payload is required" }, { status: 400 });
+    if (!(file instanceof File)) {
+      return Response.json({ error: "file payload is required" }, { status: 400 });
     }
 
-    const mimeTypeValue = getMimeTypeFromDataUrl(fileBase64, mimeType || "");
-    const fileBytes = toFileBuffer(fileBase64);
-    const fileBlob = new Blob([fileBytes], { type: mimeTypeValue });
-    const formData = new FormData();
-    formData.append(
+    const mimeTypeValue = file.type || mimeType || "application/octet-stream";
+    const resolvedFileBytes = new Uint8Array(await file.arrayBuffer());
+    const fileBlob = new Blob([resolvedFileBytes], { type: mimeTypeValue });
+    const payloadFormData = new FormData();
+    payloadFormData.append(
       "file",
       fileBlob,
       `${documentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
     );
+    payloadFormData.append("documentType", documentType);
+    if (companyName) {
+      payloadFormData.append("companyName", companyName);
+      payloadFormData.append("company_name", companyName);
+    }
+    if (conversationId) {
+      payloadFormData.append("conversation_id", conversationId);
+    }
+    if (tradeLicenseNumber) {
+      payloadFormData.append("trade_license_number", tradeLicenseNumber);
+    }
+    if (documentContext !== null && documentContext !== undefined) {
+      payloadFormData.append("document_context", typeof documentContext === "string" ? documentContext : JSON.stringify(documentContext));
+    }
+    if (contextHint !== null && contextHint !== undefined) {
+      payloadFormData.append("context_hint", typeof contextHint === "string" ? contextHint : JSON.stringify(contextHint));
+    }
+    if (isPresetSample !== null && isPresetSample !== undefined) {
+      payloadFormData.append("isPresetSample", typeof isPresetSample === "string" ? isPresetSample : JSON.stringify(isPresetSample));
+    }
+    payloadFormData.append("mimeType", mimeTypeValue);
+
+    console.log("Forwarding multipart payload to Azure validator:", {
+      documentType,
+      companyName,
+      conversationId,
+      tradeLicenseNumber,
+      hasDocumentContext: documentContext !== null && documentContext !== undefined,
+      hasContextHint: contextHint !== null && contextHint !== undefined,
+      isPresetSample: isPresetSample !== null && isPresetSample !== undefined,
+      mimeType: mimeTypeValue,
+      fileName: file.name,
+    });
 
     const externalRes = await fetch(validationConfig.url, {
       method: "POST",
-      body: formData,
+      body: payloadFormData,
     });
 
     const rawResponse = await externalRes.text();
@@ -199,6 +240,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       rawResponse: {
         ...parsedResponse,
         gpt_review: mergedGptReview,
+      },
+      requestContext: {
+        company_name: companyName || null,
+        conversation_id: conversationId || null,
+        trade_license_number: tradeLicenseNumber || null,
+        document_context: documentContext,
+        context_hint: contextHint,
+        is_preset_sample: isPresetSample ?? null,
       },
     });
   } catch (error: any) {

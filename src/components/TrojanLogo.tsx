@@ -1,42 +1,49 @@
 export default function TrojanLogo() {
   return (
-    <div className="flex items-center gap-3">
-      <svg
-        viewBox="0 0 120 120"
-        className="h-12 w-12 shrink-0"
-        aria-hidden="true"
-      >
-        <circle cx="60" cy="60" r="55" fill="white" stroke="#1f5fbf" strokeWidth="4" />
+    <svg
+      viewBox="0 0 720 220"
+      className="h-14 w-auto max-w-full"
+      role="img"
+      aria-label="Trojan Construction Holding"
+    >
+      <g transform="translate(42 26)">
         <path
-          d="M60 18 L88 78 H32 Z"
-          fill="#1f5fbf"
+          d="M68 0 L141 147 H0 Z"
+          fill="#1f2f47"
         />
-        <circle cx="60" cy="62" r="7" fill="white" />
+        <circle cx="70" cy="66" r="12" fill="#ffffff" />
         <path
-          d="M24 92 C38 80, 56 74, 60 74 C68 74, 86 78, 96 90"
+          d="M10 144 C34 124, 60 116, 70 116 C82 116, 107 122, 131 143"
           fill="none"
-          stroke="#1f5fbf"
-          strokeWidth="6"
+          stroke="#ffffff"
+          strokeWidth="10"
           strokeLinecap="round"
         />
-        <path
-          d="M18 98 C35 83, 51 79, 60 79 C72 79, 88 84, 102 97"
-          fill="none"
-          stroke="#1f5fbf"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          opacity="0.95"
-        />
-      </svg>
+      </g>
 
-      <div className="leading-none">
-        <div className="font-serif text-[2.2rem] tracking-[0.12em] text-[#d4a000]">
+      <g transform="translate(236 56)" fill="#1f2f47">
+        <text
+          x="0"
+          y="56"
+          fontFamily="Arial, Helvetica, sans-serif"
+          fontSize="68"
+          fontWeight="700"
+          letterSpacing="2"
+        >
           TROJAN
-        </div>
-        <div className="mt-1 font-serif text-[0.95rem] tracking-[0.22em] text-slate-600">
-          GENERAL CONTRACTING
-        </div>
-      </div>
-    </div>
+        </text>
+        <text
+          x="2"
+          y="116"
+          fontFamily="Arial, Helvetica, sans-serif"
+          fontSize="33"
+          fontWeight="600"
+          letterSpacing="1.6"
+          opacity="1"
+        >
+          CONSTRUCTION HOLDING
+        </text>
+      </g>
+    </svg>
   );
 }

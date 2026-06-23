@@ -201,9 +201,15 @@ export default function App() {
   // Automated document scanning & government lookup cascade orchestration
   const handleAnalyzeDocument = async (
     type: 'trade_license' | 'vat_certificate' | 'bank_document',
-    fileBase64: string | null,
-    mimeType: string,
-    isPresetSample?: { companyName: string }
+    file: File | null,
+    isPresetSample?: { companyName: string },
+    uploadContext?: {
+      companyName?: string;
+      conversationId?: string | null;
+      tradeLicenseNumber?: string;
+      documentContext?: Record<string, unknown> | string | null;
+      contextHint?: Record<string, unknown> | string | null;
+    }
   ) => {
     // 1. Mark status as verifying, and log the scanning kickoff
     setRegistrationState(prev => {
@@ -215,7 +221,9 @@ export default function App() {
           [type]: {
             ...doc,
             status: 'verifying',
-            fileName: isPresetSample ? `preset_${type}_sample.svg` : 'uploaded_file.' + mimeType.split('/')[1],
+            fileName: isPresetSample
+              ? `preset_${type}_sample.svg`
+              : file?.name || `uploaded_file.${file?.type?.split('/')[1] || 'bin'}`,
             uploadedAt: new Date().toLocaleTimeString(),
             validationLogs: [
               `Kickoff audit protocol: OCR visual analysis matching.`,
@@ -228,15 +236,35 @@ export default function App() {
 
     try {
       // 2. Call the Express backend to run OCR extraction
+      const formData = new FormData();
+      formData.append('documentType', type);
+      if (file) {
+        formData.append('file', file, file.name);
+        formData.append('mimeType', file.type || 'application/octet-stream');
+      }
+      if (isPresetSample) {
+        formData.append('isPresetSample', JSON.stringify(isPresetSample));
+      }
+      if (uploadContext?.companyName) {
+        formData.append('companyName', uploadContext.companyName);
+        formData.append('company_name', uploadContext.companyName);
+      }
+      if (uploadContext?.conversationId) {
+        formData.append('conversation_id', uploadContext.conversationId);
+      }
+      if (uploadContext?.tradeLicenseNumber) {
+        formData.append('trade_license_number', uploadContext.tradeLicenseNumber);
+      }
+      if (uploadContext?.documentContext) {
+        formData.append('document_context', JSON.stringify(uploadContext.documentContext));
+      }
+      if (uploadContext?.contextHint) {
+        formData.append('context_hint', JSON.stringify(uploadContext.contextHint));
+      }
+
       const analyzeRes = await fetch('/api/analyze-document', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentType: type,
-          fileBase64,
-          mimeType,
-          isPresetSample
-        })
+        body: formData
       });
 
       const analyzeData = await analyzeRes.json();
@@ -307,13 +335,16 @@ export default function App() {
                 documentTypeMismatchReason,
               ].filter(Boolean),
             };
-      const acceptanceReasonTexts = Array.isArray(effectiveDocumentAcceptance?.reasons)
-        ? effectiveDocumentAcceptance.reasons.map(reason => String(reason).toLowerCase())
+      const backendAcceptanceReasons = Array.isArray(effectiveDocumentAcceptance?.reasons)
+        ? effectiveDocumentAcceptance.reasons.map(reason => String(reason).trim()).filter(Boolean)
         : [];
+      const backendAcceptanceReasonText = backendAcceptanceReasons.join(' ');
+      const backendIsExpired = typeof effectiveDocumentAcceptance?.is_expired === 'boolean'
+        ? effectiveDocumentAcceptance.is_expired
+        : null;
       const isDocumentExpired =
-        Boolean(effectiveDocumentAcceptance?.is_expired) ||
-        acceptanceReasonTexts.some(reason => reason.includes('expired')) ||
-        Boolean(effectiveDocumentAcceptance?.expiry_date && new Date(effectiveDocumentAcceptance.expiry_date).getTime() < Date.now());
+        backendIsExpired === true ||
+        backendAcceptanceReasons.some(reason => reason.toLowerCase().includes('expired'));
       const effectiveFinalStatus: DocumentVerification['status'] =
         companyMatchState === 'mismatch'
           ? 'failed'
@@ -324,15 +355,17 @@ export default function App() {
             : companyMatches && acceptanceStatus === 'approved'
           ? 'verified'
             : 'failed';
-      const friendlyRejectionReason = isDocumentExpired
-        ? 'Your document appears to be expired.'
-        : !documentTypeMatches
+      const friendlyRejectionReason = !documentTypeMatches
         ? documentTypeMismatchReason
         : companyMatchState === 'mismatch'
-          ? companyMismatchReason
+          ? companyMismatchReason || backendAcceptanceReasonText || 'Your company name does not match the uploaded document.'
           : companyNeedsReview
             ? `Company name is close to the requested name. Please review and confirm the details.`
-          : 'We could not approve this document because one or more checks did not pass.';
+            : backendAcceptanceReasonText
+              ? backendAcceptanceReasonText
+              : isDocumentExpired
+                ? 'Your document appears to be expired.'
+                : 'We could not approve this document because one or more checks did not pass.';
       const friendlyNextStep = 'Please upload a clearer or corrected document so we can continue.';
 
       // 3. Mark OCR success and prompt the registry check starting
@@ -486,7 +519,7 @@ OCR Scanned Name: "${getDisplayOcrName(extracted)}"
 Review Note: Company name is a close match and needs a quick review before approval.
 Next Step: We will continue once the review is complete.`
             : `[[DOCUMENT_REJECTED]]
-Reason: ${friendlyRejectionReason}
+Rejection Summary: ${friendlyRejectionReason}
 Next Step: ${friendlyNextStep}`
       );
 
@@ -536,19 +569,79 @@ Next Step: ${friendlyNextStep}`
 
   // Steps calculation for visual progress bar tracking
   const docs = Object.values(registrationState.documents) as DocumentVerification[];
-  const numUploaded = docs.filter(d => d.status !== 'empty').length;
-  const numVerified = docs.filter(d => d.status === 'verified').length;
+  const tradeDoc = registrationState.documents.trade_license;
+  const vatDoc = registrationState.documents.vat_certificate;
+  const bankDoc = registrationState.documents.bank_document;
 
-  let currentStepIndex = 1;
-  if (submissionComplete) {
-    currentStepIndex = 4;
-  } else if (numVerified === 3) {
-    currentStepIndex = 3;
-  } else if (numUploaded > 0) {
-    currentStepIndex = 2;
-  } else {
-    currentStepIndex = 1;
-  }
+  const currentStepIndex = submissionComplete
+    ? 4
+    : bankDoc.status === 'verified'
+      ? 4
+      : vatDoc.status === 'verified'
+        ? 3
+        : tradeDoc.status === 'verified'
+          ? 2
+          : tradeDoc.status === 'failed' || tradeDoc.status === 'review'
+            ? 2
+            : tradeDoc.status !== 'empty'
+              ? 2
+              : 1;
+
+  const overallAuditState = (() => {
+    const statuses = [tradeDoc.status, vatDoc.status, bankDoc.status];
+    if (statuses.some(status => status === 'failed')) return 'rejected' as const;
+    if (statuses.some(status => status === 'review')) return 'review' as const;
+    if (statuses.every(status => status === 'verified')) return 'approved' as const;
+    return 'in_progress' as const;
+  })();
+
+  const getStepVisualState = (stepId: number) => {
+    if (stepId === 1) {
+      if (tradeDoc.status === 'failed') return 'failed';
+      if (tradeDoc.status === 'review') return 'review';
+      if (tradeDoc.status === 'verified') return 'completed';
+      if (tradeDoc.status !== 'empty') return 'in_progress';
+      return 'idle';
+    }
+
+    if (stepId === 2) {
+      if (tradeDoc.status === 'failed') return 'failed';
+      if (tradeDoc.status === 'review') return 'review';
+      if (tradeDoc.status === 'verified') {
+        if (vatDoc.status === 'failed') return 'failed';
+        if (vatDoc.status === 'review') return 'review';
+        if (vatDoc.status === 'verified') return 'completed';
+        if (vatDoc.status !== 'empty') return 'in_progress';
+        return 'in_progress';
+      }
+      if (tradeDoc.status !== 'empty') return 'in_progress';
+      return 'idle';
+    }
+
+    if (stepId === 3) {
+      if (tradeDoc.status === 'failed' || vatDoc.status === 'failed') return 'failed';
+      if (tradeDoc.status === 'review' || vatDoc.status === 'review') return 'review';
+      if (tradeDoc.status === 'verified' && vatDoc.status === 'verified') {
+        if (bankDoc.status === 'failed') return 'failed';
+        if (bankDoc.status === 'review') return 'review';
+        if (bankDoc.status === 'verified') return 'completed';
+        if (bankDoc.status !== 'empty') return 'in_progress';
+        return 'in_progress';
+      }
+      if (tradeDoc.status === 'verified' || vatDoc.status === 'verified' || vatDoc.status !== 'empty') return 'in_progress';
+      return 'idle';
+    }
+
+    if (stepId === 4) {
+      if (submissionComplete) return 'completed';
+      if (tradeDoc.status === 'failed' || vatDoc.status === 'failed' || bankDoc.status === 'failed') return 'failed';
+      if (tradeDoc.status === 'review' || vatDoc.status === 'review' || bankDoc.status === 'review') return 'review';
+      if (tradeDoc.status === 'verified' && vatDoc.status === 'verified' && bankDoc.status === 'verified') return 'completed';
+      return 'idle';
+    }
+
+    return 'idle';
+  };
 
   const steps = [
     {
@@ -606,7 +699,15 @@ Next Step: ${friendlyNextStep}`
             {/* Background Line & Active Fill */}
             <div className="absolute top-5 left-[12.5%] right-[12.5%] h-[2px] bg-slate-100 -translate-y-1/2 z-0">
               <div 
-                className="h-full bg-indigo-600 transition-all duration-500 ease-in-out"
+                className={`h-full transition-all duration-500 ease-in-out ${
+                  overallAuditState === 'rejected'
+                    ? 'bg-rose-500'
+                    : overallAuditState === 'review'
+                      ? 'bg-amber-500'
+                      : overallAuditState === 'approved'
+                        ? 'bg-emerald-500'
+                        : 'bg-indigo-600'
+                }`}
                 style={{ 
                   width: `${
                     currentStepIndex === 1 ? '0%' : 
@@ -619,22 +720,33 @@ Next Step: ${friendlyNextStep}`
             </div>
 
             {steps.map((step) => {
-              const isActive = currentStepIndex === step.id;
-              const isCompleted = currentStepIndex > step.id;
-              
+              const stepState = getStepVisualState(step.id);
+              const isActive = stepState === 'in_progress';
+              const isCompleted = stepState === 'completed';
+              const isFailed = stepState === 'failed';
+              const isReview = stepState === 'review';
+
               return (
                 <div key={step.id} className="relative z-10 flex flex-col items-center flex-1">
                   <div 
                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-2 ${
-                      isCompleted 
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-sm' 
-                        : isActive 
-                          ? 'bg-indigo-50 border-indigo-600 text-indigo-600 scale-105 shadow-md ring-4 ring-indigo-50' 
-                          : 'bg-white border-slate-200 text-slate-400'
+                      isFailed
+                        ? 'bg-rose-50 border-rose-500 text-rose-600 shadow-sm'
+                        : isCompleted 
+                          ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-sm' 
+                          : isReview
+                            ? 'bg-amber-50 border-amber-500 text-amber-600 shadow-sm'
+                            : isActive 
+                              ? 'bg-indigo-50 border-indigo-600 text-indigo-600 scale-105 shadow-md ring-4 ring-indigo-50' 
+                              : 'bg-white border-slate-200 text-slate-400'
                     }`}
                   >
-                    {isCompleted ? (
+                    {isFailed ? (
+                      <ShieldCheck className="w-5 h-5 text-rose-600" />
+                    ) : isCompleted ? (
                       <Check className="w-5 h-5 text-emerald-600" />
+                    ) : isReview ? (
+                      <ShieldCheck className="w-5 h-5 text-amber-600" />
                     ) : (
                       step.icon(isActive, isCompleted)
                     )}
@@ -642,7 +754,15 @@ Next Step: ${friendlyNextStep}`
                   
                   <div className="mt-3 text-center">
                     <span className={`block text-[10px] font-bold uppercase tracking-wider ${
-                      isActive ? 'text-indigo-600' : isCompleted ? 'text-emerald-700' : 'text-slate-400'
+                      isFailed
+                        ? 'text-rose-600'
+                        : isActive
+                          ? 'text-indigo-600'
+                          : isCompleted
+                            ? 'text-emerald-700'
+                            : isReview
+                              ? 'text-amber-700'
+                              : 'text-slate-400'
                     }`}>
                       {step.label}
                     </span>
