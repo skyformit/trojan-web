@@ -488,25 +488,6 @@ export default function VerificationPanel({
               )}
             </div>
 
-            {doc.ocrResults && Object.keys(doc.ocrResults).length > 0 && (
-              <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400">Raw OCR Results</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Backend `results` object</h5>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-                  {Object.entries(doc.ocrResults).slice(0, 8).map(([key, field]) => (
-                    <div key={key} className="rounded border border-slate-200 bg-slate-50 p-3">
-                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">{key}</span>
-                      <span className="font-bold text-slate-800 break-words">{field?.value || 'N/A'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {doc.documentAcceptance && (
               <div className="p-4 bg-white border border-slate-200 rounded shadow-sm space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -536,16 +517,16 @@ export default function VerificationPanel({
                     </span>
                   </div>
                 </div>
-                {doc.documentAcceptance.reasons?.length ? (
-                  <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Reasons</span>
-                    <ul className="list-disc pl-5 space-y-1 text-xs text-slate-700 leading-relaxed">
-                      {doc.documentAcceptance.reasons.map((reason, idx) => (
-                        <li key={idx}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+                <div className="rounded border border-slate-200 bg-slate-50 p-3">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-2">Review Summary</span>
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {doc.documentAcceptance.status === 'approved'
+                      ? 'After review, your document was accepted and is ready for the next step in the onboarding process.'
+                      : doc.documentAcceptance.status === 'review'
+                        ? 'After review, your document has been sent for a closer check. We will continue once that review is complete.'
+                        : 'After review, your document could not be approved at this time. Please upload a corrected copy to continue.'}
+                  </p>
+                </div>
               </div>
             )}
 

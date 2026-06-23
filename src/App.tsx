@@ -244,11 +244,6 @@ export default function App() {
       console.log("OCR Extracted values:", extracted);
       const documentAcceptance = analyzeData.documentAcceptance || analyzeData.rawResponse?.document_acceptance || null;
       const ocrResults = analyzeData.results || analyzeData.rawResponse?.results || {};
-      const qrCodes = Array.isArray(analyzeData.rawResponse?.qr_codes?.value)
-        ? analyzeData.rawResponse.qr_codes.value
-        : Array.isArray(analyzeData.qr_codes?.value)
-          ? analyzeData.qr_codes.value
-          : [];
       const enteredCompanyName = registrationState.companyName || '';
       const extractedCompanyName = getDisplayOcrName(extracted);
       const companyNameAligned =
@@ -283,31 +278,27 @@ export default function App() {
               documentTypeMismatchReason,
             ].filter(Boolean),
           };
-      const bankQrRequired = type === 'bank_document' && qrCodes.length === 0;
-      const bankQrReason = 'QR code is required for bank documents.';
-      const qrEnforcedDocumentAcceptance = bankQrRequired
-        ? {
-            ...(effectiveDocumentAcceptance || {}),
-            status: 'rejected',
-            acceptable: false,
-            missing_fields: Array.from(new Set([
-              ...((effectiveDocumentAcceptance as any)?.missing_fields || []),
-              'qr_code',
-            ])),
-            reasons: [
-              ...((effectiveDocumentAcceptance as any)?.reasons || []),
-              bankQrReason,
-            ].filter(Boolean),
-          }
-        : effectiveDocumentAcceptance;
+      const acceptanceReasonTexts = Array.isArray(effectiveDocumentAcceptance?.reasons)
+        ? effectiveDocumentAcceptance.reasons.map(reason => String(reason).toLowerCase())
+        : [];
+      const isDocumentExpired =
+        Boolean(effectiveDocumentAcceptance?.is_expired) ||
+        acceptanceReasonTexts.some(reason => reason.includes('expired')) ||
+        Boolean(effectiveDocumentAcceptance?.expiry_date && new Date(effectiveDocumentAcceptance.expiry_date).getTime() < Date.now());
       const effectiveFinalStatus: DocumentVerification['status'] =
-        bankQrRequired
-          ? 'failed'
-          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
-            ? 'verified'
-            : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
-              ? 'review'
-              : 'failed';
+        companyNameAligned && documentTypeMatches && acceptanceStatus === 'approved'
+          ? 'verified'
+          : companyNameAligned && documentTypeMatches && acceptanceStatus === 'review'
+            ? 'review'
+            : 'failed';
+      const friendlyRejectionReason = isDocumentExpired
+        ? 'Your document appears to be expired.'
+        : !documentTypeMatches
+        ? documentTypeMismatchReason
+        : !companyNameAligned
+          ? companyMismatchReason
+          : 'We could not approve this document because one or more checks did not pass.';
+      const friendlyNextStep = 'Please upload a clearer or corrected document so we can continue.';
 
       // 3. Mark OCR success and prompt the registry check starting
       setRegistrationState(prev => {
@@ -321,7 +312,7 @@ export default function App() {
               status: 'ocr_completed',
               extractedData: extracted,
               ocrResults,
-              documentAcceptance: qrEnforcedDocumentAcceptance,
+              documentAcceptance: effectiveDocumentAcceptance,
               processingTimeMs: analyzeData.processingTimeMs,
               processingTime: analyzeData.processingTime,
               validationLogs: [
@@ -336,8 +327,8 @@ export default function App() {
                   ? 'Document type matched the active workflow step.'
                   : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
                 !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
-                ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
-                  ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
+                ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
+                  ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
                   : [])
               ]
             }
@@ -387,22 +378,21 @@ export default function App() {
             matched: effectiveFinalStatus === 'verified',
             registeredName: getDisplayOcrName(extracted),
             status: effectiveFinalStatus === 'verified' ? 'ACTIVE' : 'NOT_FOUND',
-            details: qrEnforcedDocumentAcceptance
+            details: effectiveDocumentAcceptance
               ? `Document acceptance status: ${decisionLabel}.`
               : 'Document acceptance response unavailable.',
           },
-          documentAcceptance: qrEnforcedDocumentAcceptance,
+          documentAcceptance: effectiveDocumentAcceptance,
           validationLogs: [
             ...doc.validationLogs,
             `Document Acceptance Decision: ${decisionLabel}`,
-            qrEnforcedDocumentAcceptance?.document_type ? `Document Type: ${qrEnforcedDocumentAcceptance.document_type}` : 'Document Type: N/A',
+            effectiveDocumentAcceptance?.document_type ? `Document Type: ${effectiveDocumentAcceptance.document_type}` : 'Document Type: N/A',
             documentTypeMatches
               ? 'Document type matched the active workflow step.'
               : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
             !companyNameAligned ? `Company name mismatch: ${companyMismatchReason}` : 'Company name aligned.',
-            bankQrRequired ? `QR code is missing for bank document.` : 'QR code check passed.',
-            ...(Array.isArray(qrEnforcedDocumentAcceptance?.reasons) && qrEnforcedDocumentAcceptance.reasons.length > 0
-              ? qrEnforcedDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
+            ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
+              ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
               : []),
             effectiveFinalStatus === 'verified'
               ? 'Compliance Checklist APPROVED.'
@@ -443,16 +433,24 @@ export default function App() {
       await streamChatMessage(
         setChatHistory,
         effectiveFinalStatus === 'verified'
-          ? `✦ **Document Accepted** ✦\n\nI have scanned your submitted **${type.replace(/_/g, ' ').toUpperCase()}**.\n\n- **OCR Scanned Name**: "${getDisplayOcrName(extracted)}"\n- **Acceptance Status**: ✅ Approved by Expert Intelligent rules.\n\n${
+          ? `[[DOCUMENT_ACCEPTED]]
+Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
+OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Acceptance Status: Approved by Expert Intelligent rules
+Next Step: ${
               type === 'trade_license'
-                ? "Let's move onto **Step 3**. Please provide your company's **VAT Certificate**."
+                ? "Let's move onto Step 3. Please provide your company's VAT Certificate."
                 : type === 'vat_certificate'
-                ? "Great! We are almost done. Please provide your official **Bank Document** (Ownership Statement)."
-                : "All requested parameters are verified! Please review the registry verification score card on the right, and submit your registration profile."
+                ? "Great! We are almost done. Please provide your official Bank Document (Ownership Statement)."
+                : "All requested parameters are verified! Please review the score card on the right, and submit your registration profile."
             }`
           : effectiveFinalStatus === 'review'
             ? `⚠ **Document Sent for Review**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Status**\nYour document is currently under expert review.\n\n**Next Step**\nWe will continue once the acceptance rules are resolved.`
-            : `⚠ **Document Rejected**\n\n**Detected OCR Name**\n"${getDisplayOcrName(extracted)}"\n\n**Why it was flagged**\n${!documentTypeMatches ? `• ${documentTypeMismatchReason}` : !companyNameAligned ? `• ${companyMismatchReason}` : '• The document did not satisfy the required validation checks.'}\n\n**Next Step**\nPlease upload a corrected document to continue.`
+            : `[[DOCUMENT_REJECTED]]
+Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
+OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Reason: ${friendlyRejectionReason}
+Next Step: ${friendlyNextStep}`
       );
 
     } catch (err: any) {

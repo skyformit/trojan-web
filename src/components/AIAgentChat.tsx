@@ -71,7 +71,7 @@ type ContactValidationErrors = {
   phone?: string;
 };
 
-const UAE_MOBILE_PREFIX_OPTIONS = ['51', '52', '53', '54', '55', '56', '57', '58', '59'] as const;
+const UAE_MOBILE_PREFIX_OPTIONS = ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59'] as const;
 
 function splitUaeMobileNumber(value: string) {
   const normalized = normalizeUaeMobileNumber(value);
@@ -81,7 +81,7 @@ function splitUaeMobileNumber(value: string) {
   return {
     prefix: UAE_MOBILE_PREFIX_OPTIONS.includes(prefix as typeof UAE_MOBILE_PREFIX_OPTIONS[number])
       ? prefix
-      : '51',
+      : '50',
     localNumber,
   };
 }
@@ -457,8 +457,8 @@ function validateContactInfo(name: string, email: string, phone: string): Contac
 
   if (!trimmedPhone) {
     errors.phone = 'UAE mobile number is required.';
-  } else if (!/^5[1-9]\d{7}$/.test(normalizedPhone)) {
-    errors.phone = 'Enter a valid UAE mobile number using +971 and a 51 to 59 prefix followed by 7 digits.';
+  } else if (!/^5[0-9]\d{7}$/.test(normalizedPhone)) {
+    errors.phone = 'Enter a valid UAE mobile number using +971 and a 50 to 59 prefix followed by 7 digits.';
   }
 
   return errors;
@@ -473,7 +473,7 @@ function hasCompleteContactInfo(state: SupplierRegistrationState) {
     name &&
     email &&
     /^([^\s@]+@[^\s@]+\.[^\s@]+)$/.test(email) &&
-    /^5[1-9]\d{7}$/.test(phone)
+    /^5[0-9]\d{7}$/.test(phone)
   );
 }
 
@@ -507,7 +507,7 @@ export default function AIAgentChat({
   const [activeUploadType, setActiveUploadType] = useState<'trade_license' | 'vat_certificate' | 'bank_document' | null>('trade_license');
   const [contactValidationAttempted, setContactValidationAttempted] = useState(false);
   const [contactErrors, setContactErrors] = useState<ContactValidationErrors>({});
-  const [uaePhonePrefix, setUaePhonePrefix] = useState<'51' | '52' | '53' | '54' | '55' | '56' | '57' | '58' | '59'>('51');
+  const [uaePhonePrefix, setUaePhonePrefix] = useState<'50' | '51' | '52' | '53' | '54' | '55' | '56' | '57' | '58' | '59'>('50');
   const [uaePhoneLocalNumber, setUaePhoneLocalNumber] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
@@ -811,18 +811,11 @@ export default function AIAgentChat({
 
       await streamChatMessage(
         setChatHistory,
-        `✦ **Contact Details Registered** ✦
-
-**Recipient Name**
-${cName}
-
-**Notification Channels**
-• Email: ${cEmail}
-• SMS: ${cPhone}
-
-**Next Step**
-Please upload or drop your **Valid Trade License** (PDF) to proceed.
-
+        `[[CONTACT_SUMMARY]]
+Recipient Name: ${cName}
+Email: ${cEmail}
+SMS: ${cPhone}
+Next Step: Please upload or drop your Valid Trade License (PDF) to proceed.
 We will verify your company's credentials after the upload.`
       );
     }, 850);
@@ -842,12 +835,18 @@ We will verify your company's credentials after the upload.`
 
   const processFileUpload = async (file: File, type: 'trade_license' | 'vat_certificate' | 'bank_document') => {
     setIsUploading(true);
+    const documentLabel =
+      type === 'trade_license'
+        ? 'trade license'
+        : type === 'vat_certificate'
+          ? 'VAT certificate'
+          : 'bank document';
     
     const logId = 'upload-' + Date.now();
     setChatHistory(prev => [...prev, {
       id: logId,
       sender: 'system',
-      text: `Preparing "${file.name}" for ${type.replace(/_/g, ' ')} validation...`,
+      text: `Getting your ${documentLabel} ready for review...`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }]);
 
@@ -860,7 +859,7 @@ We will verify your company's credentials after the upload.`
           setChatHistory(prev => [...prev, {
             id: 'upload-start-' + Date.now(),
             sender: 'system',
-            text: `Validation request started for ${type.replace(/_/g, ' ')}. Sending file to the API...`,
+            text: `We have received your ${documentLabel}. Starting the review now...`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }]);
 
@@ -909,6 +908,165 @@ We will verify your company's credentials after the upload.`
   const [dragActive, setDragActive] = useState(false);
 
   const renderFormattedText = (text: string) => {
+    if (text.startsWith('[[DOCUMENT_REJECTED]]')) {
+      const rows = text
+        .replace('[[DOCUMENT_REJECTED]]', '')
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const rowMap = rows.reduce<Record<string, string>>((acc, line) => {
+        const [label, ...valueParts] = line.split(':');
+        if (!label || valueParts.length === 0) return acc;
+        acc[label.trim()] = valueParts.join(':').trim();
+        return acc;
+      }, {});
+
+      return (
+        <div className="space-y-3">
+          <div className="font-bold text-slate-900 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-500" />
+            <span>Document Rejected</span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
+              <div className="px-3 py-2 border-r border-slate-200">Field</div>
+              <div className="px-3 py-2">Value</div>
+            </div>
+
+            {[
+              ['Document Type', rowMap['Document Type'] || 'N/A'],
+              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
+              ['Reason', rowMap['Reason'] || 'This document could not be approved.'],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
+                <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-slate-800 break-words">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg bg-rose-50 border border-rose-100 px-3 py-2 text-xs text-slate-800">
+            <span className="font-bold text-rose-700">Next Step:</span>{' '}
+            {rowMap['Next Step'] || 'Please upload a corrected document to continue.'}
+          </div>
+        </div>
+      );
+    }
+
+    if (text.startsWith('[[DOCUMENT_ACCEPTED]]')) {
+      const rows = text
+        .replace('[[DOCUMENT_ACCEPTED]]', '')
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const rowMap = rows.reduce<Record<string, string>>((acc, line) => {
+        const [label, ...valueParts] = line.split(':');
+        if (!label || valueParts.length === 0) return acc;
+        acc[label.trim()] = valueParts.join(':').trim();
+        return acc;
+      }, {});
+
+      return (
+        <div className="space-y-3">
+          <div className="font-bold text-slate-900 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span>Document Accepted</span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
+              <div className="px-3 py-2 border-r border-slate-200">Field</div>
+              <div className="px-3 py-2">Value</div>
+            </div>
+
+            {[
+              ['Document Type', rowMap['Document Type'] || 'N/A'],
+              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
+              ['Acceptance Status', rowMap['Acceptance Status'] || 'Approved'],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
+                <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-slate-800 break-words">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-slate-800">
+            <span className="font-bold text-emerald-700">Next Step:</span>{' '}
+            {rowMap['Next Step'] || 'Please continue with the next onboarding step.'}
+          </div>
+        </div>
+      );
+    }
+
+    if (text.startsWith('[[CONTACT_SUMMARY]]')) {
+      const rows = text
+        .replace('[[CONTACT_SUMMARY]]', '')
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const rowMap = rows.reduce<Record<string, string>>((acc, line) => {
+        const [label, ...valueParts] = line.split(':');
+        if (!label || valueParts.length === 0) return acc;
+        acc[label.trim()] = valueParts.join(':').trim();
+        return acc;
+      }, {});
+
+      return (
+        <div className="space-y-3">
+          <div className="font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-500" />
+            <span>Contact Details Registered</span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
+              <div className="px-3 py-2 border-r border-slate-200">Field</div>
+              <div className="px-3 py-2">Value</div>
+            </div>
+
+            {[
+              ['Recipient Name', rowMap['Recipient Name'] || 'N/A'],
+              ['Email', rowMap['Email'] || 'N/A'],
+              ['SMS', rowMap['SMS'] || 'N/A'],
+            ].map(([label, value]) => (
+              <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
+                <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-slate-800 break-words">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-slate-800">
+            <span className="font-bold text-indigo-700">Next Step:</span>{' '}
+            {rowMap['Next Step'] || 'Please upload or drop your Valid Trade License (PDF) to proceed.'}
+            <div className="mt-1 text-[11px] text-slate-600">
+              {rows.find(line => line.startsWith('We will verify')) || 'We will verify your company\'s credentials after the upload.'}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
 
     return parts.map((part, index) => {

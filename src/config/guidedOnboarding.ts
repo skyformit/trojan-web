@@ -250,10 +250,10 @@ export function normalizeGuidedPhoneNumber(value: string) {
 export function validateGuidedPhoneNumber(value: string) {
   const normalized = normalizeUaeMobileNumber(value);
 
-  if (!/^5[1-9]\d{7}$/.test(normalized)) {
+  if (!/^5[0-9]\d{7}$/.test(normalized)) {
     return {
       valid: false,
-      reason: 'Enter a valid UAE mobile number using +971 and a 51 to 59 prefix followed by 7 digits.',
+      reason: 'Enter a valid UAE mobile number using +971 and a 50 to 59 prefix followed by 7 digits.',
     };
   }
 
