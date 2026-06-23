@@ -997,8 +997,6 @@ We will verify your company's credentials after the upload.`
             </div>
 
             {[
-              ['Document Type', rowMap['Document Type'] || 'N/A'],
-              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
               ['Reason', rowMap['Reason'] || 'This document could not be approved.'],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">

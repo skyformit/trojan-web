@@ -486,8 +486,6 @@ OCR Scanned Name: "${getDisplayOcrName(extracted)}"
 Review Note: Company name is a close match and needs a quick review before approval.
 Next Step: We will continue once the review is complete.`
             : `[[DOCUMENT_REJECTED]]
-Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
-OCR Scanned Name: "${getDisplayOcrName(extracted)}"
 Reason: ${friendlyRejectionReason}
 Next Step: ${friendlyNextStep}`
       );
