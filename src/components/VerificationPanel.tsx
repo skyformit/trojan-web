@@ -62,6 +62,10 @@ export default function VerificationPanel({
       return 'The uploaded document appears to be expired.';
     }
 
+    if (normalized.includes('plausibility score') || normalized.includes('gpt review')) {
+      return 'The document authenticity review needs a stronger match before it can be approved.';
+    }
+
     if (normalized.includes('document type')) {
       return 'The uploaded document does not match the current step in the onboarding flow.';
     }
@@ -571,8 +575,8 @@ export default function VerificationPanel({
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Decision Summary</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Final Decision</h5>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Document Authenticity</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Authenticity Verdict</h5>
                   </div>
                   {renderAcceptanceBadge(doc.documentAcceptance.status)}
                 </div>
