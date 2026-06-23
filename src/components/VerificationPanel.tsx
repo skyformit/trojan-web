@@ -16,7 +16,7 @@ export default function VerificationPanel({
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
 
-  const formatMissingFieldLabel = (field: string) => {
+  const formatMissingItemLabel = (field: string) => {
     const normalized = field.trim().toLowerCase();
     const labelMap: Record<string, string> = {
       trade_name: 'Trade Name',
@@ -34,7 +34,7 @@ export default function VerificationPanel({
     return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
   };
 
-  const formatMissingFieldLabels = (fields?: string[]) => (fields || []).map(formatMissingFieldLabel);
+  const formatMissingFieldLabels = (fields?: string[]) => (fields || []).map(formatMissingItemLabel);
 
   const formatAcceptanceValue = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -45,6 +45,60 @@ export default function VerificationPanel({
     if (value === false) return 'No';
     if (value === null || value === undefined || value === '') return 'N/A';
     return String(value);
+  };
+
+  const formatAcceptanceReasonText = (reason: string) => {
+    const normalized = reason.toLowerCase();
+
+    if (!normalized) {
+      return 'We could not approve this document because one or more checks did not pass.';
+    }
+
+    if (normalized.includes('company name') && normalized.includes('does not match')) {
+      return 'The company name on the document does not match the company name we received.';
+    }
+
+    if (normalized.includes('expired')) {
+      return 'The uploaded document appears to be expired.';
+    }
+
+    if (normalized.includes('document type')) {
+      return 'The uploaded document does not match the current step in the onboarding flow.';
+    }
+
+    if (normalized.includes('missing')) {
+      return 'Some required details are missing from the uploaded document.';
+    }
+
+    if (normalized.includes('close match')) {
+      return 'The company name is a close match and needs a quick review before approval.';
+    }
+
+    if (normalized.includes('verification url present')) {
+      return 'An official verification link was found.';
+    }
+
+    if (normalized.includes('logo present')) {
+      return 'The company logo was detected.';
+    }
+
+    if (normalized.includes('qr code present')) {
+      return 'A QR code was detected.';
+    }
+
+    if (normalized.includes('expert review contribution')) {
+      return 'The document was reviewed as part of the verification process.';
+    }
+
+    if (normalized.includes('+') && normalized.match(/\+\d+/)) {
+      return 'The document was reviewed as part of the verification process.';
+    }
+
+    if (normalized.includes('verification signals')) {
+      return 'The document includes the expected verification signals.';
+    }
+
+    return reason;
   };
 
   const renderAcceptanceBadge = (status?: string) => {
@@ -61,7 +115,7 @@ export default function VerificationPanel({
     return <span className="text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Unknown</span>;
   };
 
-  const getDocumentSummaryValue = (doc: DocumentVerification) => {
+  const getDocumentSummaryDetails = (doc: DocumentVerification) => {
     if (doc.type === 'bank_document') {
       return (
         doc.extractedData?.companyName ||
@@ -126,7 +180,7 @@ export default function VerificationPanel({
         <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Compliance Audit Score</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Overall Decision</p>
               <h3 className="text-2xl font-black text-slate-900 font-sans mt-1">{score}% Validated</h3>
             </div>
             <div className={`p-3 rounded border ${score === 100 ? 'bg-green-100 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-500'}`}>
@@ -198,10 +252,10 @@ export default function VerificationPanel({
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                       {doc.extractedData
                         ? doc.type === 'bank_document'
-                          ? `Bank Holder Name: ${getDocumentSummaryValue(doc)}`
+                          ? `Bank Holder Name: ${getDocumentSummaryDetails(doc)}`
                           : doc.type === 'vat_certificate'
-                            ? `VAT Registration No: ${getDocumentSummaryValue(doc)}`
-                            : `Trade License No: ${getDocumentSummaryValue(doc)}`
+                            ? `VAT Registration No: ${getDocumentSummaryDetails(doc)}`
+                            : `Trade License No: ${getDocumentSummaryDetails(doc)}`
                         : 'Not provided yet'}
                     </p>
                     {doc.type === 'trade_license' && doc.extractedData?.tradeName && (
@@ -372,7 +426,7 @@ export default function VerificationPanel({
                   </div>
 
                   <div>
-                    <label htmlFor="survey-biggest-project" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value of biggest project</label>
+                    <label htmlFor="survey-biggest-project" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Details of biggest project</label>
                     <select
                       id="survey-biggest-project"
                       value={registrationState.biggestProjectValue || ''}
@@ -402,7 +456,7 @@ export default function VerificationPanel({
                   </div>
 
                   <div>
-                    <label htmlFor="survey-factory-asset" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Value of factory asset</label>
+                    <label htmlFor="survey-factory-asset" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Details of factory asset</label>
                     <select
                       id="survey-factory-asset"
                       value={registrationState.factoryAssetValue || ''}
@@ -494,7 +548,7 @@ export default function VerificationPanel({
           <div className="space-y-4">
             {/* Scanned/Extracted details */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded">
-              <h5 className="text-[9px] uppercase font-bold text-slate-400 mb-3 tracking-widest">Extracted Fields via OCR</h5>
+              <h5 className="text-[9px] uppercase font-bold text-slate-400 mb-3 tracking-widest">Extracted Compliance Fields</h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {fieldsDef.map((def) => (
                   <div key={def.key} className="border-b border-slate-200 pb-1.5">
@@ -517,36 +571,48 @@ export default function VerificationPanel({
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Document Acceptance</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Expert Decision</h5>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Decision Summary</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Final Decision</h5>
                   </div>
                   {renderAcceptanceBadge(doc.documentAcceptance.status)}
                 </div>
 
                 <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
-                  <div className="px-3 py-2 border-r border-slate-200">Field</div>
-                  <div className="px-3 py-2">Value</div>
+                  <div className="px-3 py-2 border-r border-slate-200">Item</div>
+                  <div className="px-3 py-2">Details</div>
                 </div>
 
-                {[
-                  ['Document Type', formatAcceptanceValue(doc.documentAcceptance.document_type)],
-                  ['Status', formatAcceptanceValue(doc.documentAcceptance.status)],
-                  ['Score', formatAcceptanceValue(doc.documentAcceptance.score)],
-                  ['Missing Fields', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
-                  ['Reasons', formatAcceptanceValue(doc.documentAcceptance.reasons)],
-                  ['Expiry Date', formatAcceptanceValue(doc.documentAcceptance.expiry_date)],
-                  ['Expired', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
-                  ['Acceptable', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
-                ].map(([label, value]) => (
+                {(() => {
+                  const acceptanceStatus = String(doc.documentAcceptance.status || '').toLowerCase();
+                  const notesLabel = acceptanceStatus === 'rejected'
+                    ? 'Rejection Notes'
+                    : acceptanceStatus === 'review'
+                      ? 'Review Notes'
+                      : 'Approval Notes';
+                  const notes = Array.isArray(doc.documentAcceptance.reasons)
+                    ? doc.documentAcceptance.reasons.map(reason => formatAcceptanceReasonText(String(reason)))
+                    : [];
+
+                  return [
+                    ['Document Category', formatAcceptanceValue(doc.documentAcceptance.document_type)],
+                    ['Decision', formatAcceptanceValue(doc.documentAcceptance.status)],
+                    ['Review Score', formatAcceptanceValue(doc.documentAcceptance.score)],
+                    ['Outstanding Items', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
+                    [notesLabel, notes],
+                    ['Expiry Date', formatAcceptanceValue(doc.documentAcceptance.expiry_date)],
+                    ['Expired Status', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
+                    ['Approval Ready', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
+                  ] as Array<[string, unknown]>;
+                })().map(([label, value]) => (
                   <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
                     <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
                       {label}
                     </div>
                     <div className="px-3 py-2 text-slate-800 break-words">
-                      {label === 'Reasons' && Array.isArray(doc.documentAcceptance?.reasons) && doc.documentAcceptance.reasons.length > 0 ? (
+                      {Array.isArray(value) ? (
                         <ul className="space-y-1 list-disc list-inside">
-                          {doc.documentAcceptance.reasons.map((reason, index) => (
-                            <li key={`${reason}-${index}`}>{reason}</li>
+                          {value.map((reason, index) => (
+                            <li key={`${label}-${index}`}>{reason}</li>
                           ))}
                         </ul>
                       ) : (
@@ -577,7 +643,7 @@ export default function VerificationPanel({
       {/* Title block */}
       <div className="mb-4">
         <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900">Real-Time Registration Auditor</h3>
-        <p className="text-xs text-slate-400 mt-0.5">Automated document analysis & identity checks</p>
+        <p className="text-xs text-slate-400 mt-0.5">Document review and verification</p>
       </div>
 
       {/* Tabs list */}

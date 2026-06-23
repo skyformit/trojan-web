@@ -10,6 +10,7 @@ import {
   Database,
   Building,
   Check,
+  XCircle,
   Globe,
   Mail,
   Phone,
@@ -355,16 +356,79 @@ export default function App() {
             : companyMatches && acceptanceStatus === 'approved'
           ? 'verified'
             : 'failed';
+      const formatUserFacingRejectionReason = (reasonText: string) => {
+        const normalized = reasonText.toLowerCase();
+        if (!normalized) {
+          return 'We could not approve this document because one or more checks did not pass.';
+        }
+
+        if (normalized.includes('company name') && normalized.includes('does not match')) {
+          return 'The company name on the document does not match the company name we received.';
+        }
+
+        if (normalized.includes('expired')) {
+          return 'The uploaded document appears to be expired.';
+        }
+
+        if (normalized.includes('document type')) {
+          return 'The uploaded document does not match the current step in the onboarding flow.';
+        }
+
+        if (normalized.includes('missing')) {
+          return 'Some required details are missing from the uploaded document.';
+        }
+
+        if (normalized.includes('verification url present')) {
+          return 'An official verification link was found on the document.';
+        }
+
+        if (normalized.includes('logo present')) {
+          return 'The company logo was detected on the document.';
+        }
+
+        if (normalized.includes('qr code present')) {
+          return 'A QR code was detected and used as a verification signal.';
+        }
+
+        if (normalized.includes('expert review contribution')) {
+          return 'The document received an expert review as part of the verification process.';
+        }
+
+        if (normalized.includes('+') && normalized.match(/\+\d+/)) {
+          return 'The document received an expert review as part of the verification process.';
+        }
+
+        if (normalized.includes('verification signals')) {
+          return 'The document includes the expected verification signals.';
+        }
+
+        return reasonText;
+      };
+
+      const formatUserFacingReviewNote = (noteText: string) => {
+        const normalized = noteText.toLowerCase();
+
+        if (normalized.includes('close match')) {
+          return 'The company name is a close match and needs a quick review before approval.';
+        }
+
+        if (normalized.includes('company name') && normalized.includes('review')) {
+          return 'The company name needs a quick review before approval.';
+        }
+
+        return noteText || 'The document needs a quick review before approval.';
+      };
+
       const friendlyRejectionReason = !documentTypeMatches
         ? documentTypeMismatchReason
         : companyMatchState === 'mismatch'
-          ? companyMismatchReason || backendAcceptanceReasonText || 'Your company name does not match the uploaded document.'
+          ? formatUserFacingRejectionReason(companyMismatchReason || backendAcceptanceReasonText)
           : companyNeedsReview
-            ? `Company name is close to the requested name. Please review and confirm the details.`
+            ? 'The company name is a close match and needs a quick review before approval.'
             : backendAcceptanceReasonText
-              ? backendAcceptanceReasonText
+              ? formatUserFacingRejectionReason(backendAcceptanceReasonText)
               : isDocumentExpired
-                ? 'Your document appears to be expired.'
+                ? 'The uploaded document appears to be expired.'
                 : 'We could not approve this document because one or more checks did not pass.';
       const friendlyNextStep = 'Please upload a clearer or corrected document so we can continue.';
 
@@ -516,10 +580,10 @@ Next Step: ${
             ? `[[DOCUMENT_REVIEW]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Review Note: Company name is a close match and needs a quick review before approval.
+Review Note: ${formatUserFacingReviewNote('The company name is a close match and needs a quick review before approval.')}
 Next Step: We will continue once the review is complete.`
             : `[[DOCUMENT_REJECTED]]
-Rejection Summary: ${friendlyRejectionReason}
+Rejection Summary: ${formatUserFacingRejectionReason(friendlyRejectionReason)}
 Next Step: ${friendlyNextStep}`
       );
 
@@ -646,26 +710,26 @@ Next Step: ${friendlyNextStep}`
   const steps = [
     {
       id: 1,
-      label: 'Upload',
-      desc: 'Doc Drop & Gather',
+      label: 'Document Intake',
+      desc: 'Document Collection',
       icon: (active: boolean, done: boolean) => <Upload className="w-4 h-4" />
     },
     {
       id: 2,
-      label: 'Verification',
-      desc: 'OCR Validation',
+      label: 'Document Review',
+      desc: 'Validation & Checks',
       icon: (active: boolean, done: boolean) => <Building2 className="w-4 h-4" />
     },
     {
       id: 3,
-      label: 'Review',
-      desc: 'Scorecard Review',
+      label: 'Compliance Review',
+      desc: 'Decision Review',
       icon: (active: boolean, done: boolean) => <ShieldCheck className="w-4 h-4" />
     },
     {
       id: 4,
-      label: 'Finalized',
-      desc: 'Registry Approved',
+      label: 'Approved',
+      desc: 'Ready for Onboarding',
       icon: (active: boolean, done: boolean) => <CheckCircle2 className="w-4 h-4" />
     }
   ];
@@ -742,11 +806,11 @@ Next Step: ${friendlyNextStep}`
                     }`}
                   >
                     {isFailed ? (
-                      <ShieldCheck className="w-5 h-5 text-rose-600" />
+                      <XCircle className="w-5 h-5 text-rose-600" />
+                    ) : isReview ? (
+                      <AlertCircle className="w-5 h-5 text-amber-600" />
                     ) : isCompleted ? (
                       <Check className="w-5 h-5 text-emerald-600" />
-                    ) : isReview ? (
-                      <ShieldCheck className="w-5 h-5 text-amber-600" />
                     ) : (
                       step.icon(isActive, isCompleted)
                     )}
@@ -766,7 +830,28 @@ Next Step: ${friendlyNextStep}`
                     }`}>
                       {step.label}
                     </span>
-                    <span className="hidden sm:block text-[9px] text-slate-400 uppercase tracking-widest font-mono mt-0.5">
+                    <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
+                      isFailed
+                        ? 'text-rose-700 bg-rose-50 border-rose-200'
+                        : isReview
+                          ? 'text-amber-700 bg-amber-50 border-amber-200'
+                          : isCompleted
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                            : isActive
+                              ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                              : 'text-slate-400 bg-slate-50 border-slate-200'
+                    }`}>
+                      {isFailed
+                        ? 'Rejected'
+                        : isReview
+                          ? 'Needs Review'
+                          : isCompleted
+                            ? 'Approved'
+                            : isActive
+                              ? 'In Progress'
+                              : 'Pending'}
+                    </span>
+                    <span className="hidden sm:block text-[9px] text-slate-400 uppercase tracking-widest font-mono mt-1.5">
                       {step.desc}
                     </span>
                   </div>
