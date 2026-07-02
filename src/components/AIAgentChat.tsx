@@ -907,9 +907,9 @@ We will verify your company's credentials after the upload.`
       await onAnalyzeDocument(
         type,
         file,
-        { companyName: registrationState.companyName || 'AeroTech Solutions Ltd' },
+        registrationState.companyName ? { companyName: registrationState.companyName } : undefined,
         {
-          companyName: registrationState.companyName || 'AeroTech Solutions Ltd',
+          companyName: registrationState.companyName || undefined,
           conversationId,
           tradeLicenseNumber: registrationState.tradeLicenseNumber || '',
           documentContext: {
@@ -952,10 +952,7 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
-      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
-        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
-        .replace(/^Approved by backend rules$/i, 'Approved')
-        .replace(/^Approved by Expert Decision$/i, 'Approved');
+      const orderedEntries = Object.entries(rowMap).filter(([label]) => label !== 'Next Step');
 
       return (
         <div className="space-y-3">
@@ -970,11 +967,9 @@ We will verify your company's credentials after the upload.`
               <div className="px-3 py-2">Value</div>
             </div>
 
-            {[
-              ['Document Type', rowMap['Document Type'] || 'N/A'],
-              ['OCR Scanned Name', rowMap['OCR Scanned Name'] || 'N/A'],
-              ['Review Note', rowMap['Review Note'] || 'Company name is a close match.'],
-            ].map(([label, value]) => (
+            {(orderedEntries.length > 0
+              ? orderedEntries
+              : [['Review Note', rowMap['Review Note'] || 'The document needs a quick review before approval.']]).map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-amber-100 last:border-b-0">
                 <div className="px-3 py-2 font-semibold text-amber-900 bg-amber-50 border-r border-amber-100">
                   {label}
@@ -1017,6 +1012,7 @@ We will verify your company's credentials after the upload.`
           : normalizedSummary.includes('document type')
             ? 'Incorrect Document Type'
             : 'Verification Failed';
+      const orderedEntries = Object.entries(rowMap).filter(([label]) => label !== 'Next Step');
 
       return (
         <div className="space-y-3">
@@ -1032,9 +1028,9 @@ We will verify your company's credentials after the upload.`
               <div className="px-3 py-2">Value</div>
             </div>
 
-            {[
-              ['Rejection Summary', rejectionSummary],
-            ].map(([label, value]) => (
+            {(orderedEntries.length > 0
+              ? orderedEntries
+              : [['Rejection Summary', rejectionSummary]]).map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
                 <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
                   {label}
@@ -1053,6 +1049,59 @@ We will verify your company's credentials after the upload.`
         </div>
       );
     }
+
+    if (text.startsWith('[[DOCUMENT_EXPIRED]]')) {
+      const rows = text
+        .replace('[[DOCUMENT_EXPIRED]]', '')
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const rowMap = rows.reduce<Record<string, string>>((acc, line) => {
+        const [label, ...valueParts] = line.split(':');
+        if (!label || valueParts.length === 0) return acc;
+        acc[label.trim()] = valueParts.join(':').trim();
+        return acc;
+      }, {});
+      const orderedEntries = Object.entries(rowMap).filter(([label]) => label !== 'Next Step');
+
+      return (
+        <div className="space-y-3">
+          <div className="font-bold text-slate-900 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-500" />
+            <span>Document Expired</span>
+            <span className="text-[10px] uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Expired</span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
+              <div className="px-3 py-2 border-r border-slate-200">Field</div>
+              <div className="px-3 py-2">Value</div>
+            </div>
+
+            {(orderedEntries.length > 0
+              ? orderedEntries
+              : [['Expiration Summary', 'The uploaded document appears to be expired.']]).map(([label, value]) => (
+              <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
+                <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
+                  {label}
+                </div>
+                <div className="px-3 py-2 text-slate-800 break-words">
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-slate-800">
+            <span className="font-bold text-amber-700">Next Step:</span>{' '}
+            {rowMap['Next Step'] || 'Please upload a current document with a valid expiry date to continue.'}
+          </div>
+        </div>
+      );
+    }
+
     if (text.startsWith('[[DOCUMENT_ACCEPTED]]')) {
       const rows = text
         .replace('[[DOCUMENT_ACCEPTED]]', '')
@@ -1067,10 +1116,7 @@ We will verify your company's credentials after the upload.`
         acc[label.trim()] = valueParts.join(':').trim();
         return acc;
       }, {});
-      const acceptanceStatus = (rowMap['Acceptance Status'] || 'Approved')
-        .replace(/^Approved by Expert Intelligent rules$/i, 'Approved')
-        .replace(/^Approved by backend rules$/i, 'Approved')
-        .replace(/^Approved by Expert Decision$/i, 'Approved');
+      const orderedEntries = Object.entries(rowMap).filter(([label]) => label !== 'Next Step');
 
       return (
         <div className="space-y-3">
@@ -1085,9 +1131,9 @@ We will verify your company's credentials after the upload.`
               <div className="px-3 py-2">Value</div>
             </div>
 
-            {[
-              ['Acceptance Status', acceptanceStatus],
-            ].map(([label, value]) => (
+            {(orderedEntries.length > 0
+              ? orderedEntries
+              : [['Acceptance Status', 'Approved']]).map(([label, value]) => (
               <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
                 <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
                   {label}

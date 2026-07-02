@@ -29,9 +29,14 @@ export type AzureValidationResponse = {
 export type PagesEnvBindings = {
   GENERAL_BOT_ENDPOINT?: string;
   TBMS_VENDOR_LOOKUP_ENDPOINT?: string;
+  DOCUMENT_EXTRACTION_ENDPOINT?: string;
   TRADE_LICENSE_VALIDATE_ENDPOINT?: string;
   VAT_VALIDATE_ENDPOINT?: string;
   BANK_VALIDATE_ENDPOINT?: string;
+  TBMS_RECONCILIATION?: string;
+  TBMS_RECONCILIATION_ENDPOINT?: string;
+  HIDL_APPROVAL?: string;
+  APPROVAL_REVIEW_ENDPOINT?: string;
 };
 
 export const governmentRegistries = [
@@ -69,17 +74,24 @@ export function getValidationEndpoints(env?: PagesEnvBindings): Record<
   DocumentType,
   { url: string; ocrSource: string }
 > {
+  const sharedEndpoint =
+    env?.DOCUMENT_EXTRACTION_ENDPOINT ||
+    env?.TRADE_LICENSE_VALIDATE_ENDPOINT ||
+    env?.VAT_VALIDATE_ENDPOINT ||
+    env?.BANK_VALIDATE_ENDPOINT ||
+    "";
+
   return {
     trade_license: {
-      url: env?.TRADE_LICENSE_VALIDATE_ENDPOINT || "",
+      url: sharedEndpoint,
       ocrSource: "azure_validate_trade_license",
     },
     vat_certificate: {
-      url: env?.VAT_VALIDATE_ENDPOINT || "",
+      url: sharedEndpoint,
       ocrSource: "azure_validate_vat",
     },
     bank_document: {
-      url: env?.BANK_VALIDATE_ENDPOINT || "",
+      url: sharedEndpoint,
       ocrSource: "azure_validate_bank_document",
     },
   };

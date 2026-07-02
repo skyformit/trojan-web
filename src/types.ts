@@ -28,6 +28,20 @@ export interface DocumentVerification {
     acceptable?: boolean;
     expiry_date?: string;
     is_expired?: boolean;
+    company_match?: {
+      requested_company_name?: string;
+      requested_company_name_normalized?: string;
+      matched_company_name?: string;
+      matched_company_name_normalized?: string;
+      exact_match?: boolean;
+      similarity_percent?: number;
+      match_status?: string;
+    };
+    tbms_match?: {
+      status?: string;
+      license_match?: boolean;
+    };
+    recommended_action?: string;
   };
   validationLogs: string[];
   processingTimeMs?: number;
@@ -39,6 +53,9 @@ export interface DocumentVerification {
     details?: string;
   };
   error?: string;
+  agent2Response?: unknown;
+  agent3Response?: unknown;
+  agent4Response?: unknown;
 }
 
 export interface SupplierRegistrationState {

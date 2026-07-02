@@ -105,13 +105,51 @@ export default function VerificationPanel({
     return reason;
   };
 
-  const renderAcceptanceBadge = (status?: string) => {
-    const normalized = String(status || '').toLowerCase();
+  const getAcceptanceDisplayStatus = (doc: DocumentVerification) => {
+    const acceptance = doc.documentAcceptance;
+    const mismatchStatus = String(acceptance?.company_match?.match_status || acceptance?.tbms_match?.status || '').toLowerCase();
+    if (mismatchStatus === 'mismatch') {
+      return String(acceptance?.status || '').toLowerCase() || 'rejected';
+    }
+
+    if (acceptance?.is_expired) {
+      return 'expired';
+    }
+    return String(acceptance?.status || '').toLowerCase();
+  };
+
+  const getEffectiveDocStatus = (doc: DocumentVerification) => {
+    const acceptanceDisplayStatus = getAcceptanceDisplayStatus(doc);
+
+    if (acceptanceDisplayStatus === 'rejected') {
+      return doc.status && doc.status !== 'empty' ? doc.status : 'failed';
+    }
+
+    if (acceptanceDisplayStatus === 'expired') {
+      return 'expired';
+    }
+
+    if (doc.status && doc.status !== 'empty') {
+      return doc.status;
+    }
+
+    const acceptanceStatus = String(doc.documentAcceptance?.status || '').toLowerCase();
+    if (acceptanceStatus === 'approved') return 'verified';
+    if (acceptanceStatus === 'review') return 'review';
+    if (acceptanceStatus === 'rejected') return 'failed';
+    return doc.status;
+  };
+
+  const renderAcceptanceBadge = (doc: DocumentVerification) => {
+    const normalized = getAcceptanceDisplayStatus(doc);
     if (normalized === 'approved') {
       return <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Approved</span>;
     }
     if (normalized === 'review') {
       return <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Review</span>;
+    }
+    if (normalized === 'expired') {
+      return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Expired</span>;
     }
     if (normalized === 'rejected') {
       return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Rejected</span>;
@@ -149,7 +187,7 @@ export default function VerificationPanel({
   };
 
   const getDocStatusBadge = (doc: DocumentVerification) => {
-    switch (doc.status) {
+    switch (getEffectiveDocStatus(doc)) {
       case 'empty':
         return <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Missing</span>;
       case 'verifying':
@@ -160,6 +198,8 @@ export default function VerificationPanel({
         return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Checking...</span>;
       case 'review':
         return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">Review</span>;
+      case 'expired':
+        return <span className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">Expired</span>;
       case 'verified':
         return <span className="text-[10px] text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">✓ Verified</span>;
       case 'failed':
@@ -169,9 +209,9 @@ export default function VerificationPanel({
 
   const getOverallProgress = () => {
     let completed = 0;
-    if (trade_license.status === 'verified') completed += 33.3;
-    if (vat_certificate.status === 'verified') completed += 33.3;
-    if (bank_document.status === 'verified') completed += 33.4;
+    if (getEffectiveDocStatus(trade_license) === 'verified') completed += 33.3;
+    if (getEffectiveDocStatus(vat_certificate) === 'verified') completed += 33.3;
+    if (getEffectiveDocStatus(bank_document) === 'verified') completed += 33.4;
     return Math.min(Math.round(completed), 100);
   };
 
@@ -248,7 +288,7 @@ export default function VerificationPanel({
                 className="flex items-center justify-between text-left p-4 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg shadow-sm transition"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded ${doc.status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`p-2 rounded ${getEffectiveDocStatus(doc) === 'verified' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                     <FileText className="w-4 h-4" />
                   </div>
                   <div>
@@ -269,7 +309,7 @@ export default function VerificationPanel({
                     )}
                     {doc.documentAcceptance?.status && (
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        Acceptance: {doc.documentAcceptance.status}
+                        Acceptance: {doc.documentAcceptance.is_expired ? 'expired' : doc.documentAcceptance.status}
                       </p>
                     )}
                     {doc.processingTime && (
@@ -542,7 +582,7 @@ export default function VerificationPanel({
           {getDocStatusBadge(doc)}
         </div>
 
-        {doc.status === 'empty' ? (
+        {getEffectiveDocStatus(doc) === 'empty' ? (
           <div className="py-12 text-center text-slate-400 space-y-2">
             <FileText className="w-8 h-8 mx-auto text-slate-300" />
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">No document uploaded yet</p>
@@ -574,11 +614,11 @@ export default function VerificationPanel({
             {doc.documentAcceptance && (
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Document Authenticity</p>
-                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Authenticity Verdict</h5>
+                <div>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Verification Summary</p>
+                    <h5 className="text-sm font-bold text-slate-900 mt-0.5">Decision Summary</h5>
                   </div>
-                  {renderAcceptanceBadge(doc.documentAcceptance.status)}
+                  {renderAcceptanceBadge(doc)}
                 </div>
 
                 <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
@@ -588,9 +628,12 @@ export default function VerificationPanel({
 
                 {(() => {
                   const acceptanceStatus = String(doc.documentAcceptance.status || '').toLowerCase();
-                  const notesLabel = acceptanceStatus === 'rejected'
+                  const displayStatus = getAcceptanceDisplayStatus(doc);
+                  const notesLabel = displayStatus === 'rejected'
                     ? 'Rejection Notes'
-                    : acceptanceStatus === 'review'
+                    : displayStatus === 'expired'
+                      ? 'Expiration Notes'
+                      : acceptanceStatus === 'review'
                       ? 'Review Notes'
                       : 'Approval Notes';
                   const notes = Array.isArray(doc.documentAcceptance.reasons)
@@ -598,14 +641,14 @@ export default function VerificationPanel({
                     : [];
 
                   return [
-                    ['Document Category', formatAcceptanceValue(doc.documentAcceptance.document_type)],
-                    ['Decision', formatAcceptanceValue(doc.documentAcceptance.status)],
-                    ['Review Score', formatAcceptanceValue(doc.documentAcceptance.score)],
-                    ['Outstanding Items', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
+                    ['Document Type', formatAcceptanceValue(doc.documentAcceptance.document_type)],
+                    ['Final Decision', formatAcceptanceValue(displayStatus || doc.documentAcceptance.status)],
+                    ['Decision Score', formatAcceptanceValue(doc.documentAcceptance.score)],
+                    ['Missing Fields', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
                     [notesLabel, notes],
                     ['Expiry Date', formatAcceptanceValue(doc.documentAcceptance.expiry_date)],
-                    ['Expired Status', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
-                    ['Approval Ready', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
+                    ['Expired', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
+                    ['Ready for Approval', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
                   ] as Array<[string, unknown]>;
                 })().map(([label, value]) => (
                   <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">

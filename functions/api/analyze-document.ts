@@ -13,6 +13,12 @@ type ExpertReview = {
   reasoning: string;
 };
 
+function mapAzureDocumentType(documentType: DocumentType) {
+  if (documentType === "trade_license") return "trade";
+  if (documentType === "vat_certificate") return "vat";
+  return "bank";
+}
+
 function parseMaybeJson(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) {
     return value ?? null;
@@ -134,12 +140,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
     const mimeTypeValue = file.type || mimeType || "application/octet-stream";
     const resolvedFileBytes = new Uint8Array(await file.arrayBuffer());
     const fileBlob = new Blob([resolvedFileBytes], { type: mimeTypeValue });
+    const azureDocumentType = mapAzureDocumentType(documentType as DocumentType);
     const payloadFormData = new FormData();
     payloadFormData.append(
       "file",
       fileBlob,
-      `${documentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
+      `${azureDocumentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
     );
+    payloadFormData.append("document_type", azureDocumentType);
     payloadFormData.append("documentType", documentType);
     if (companyName) {
       payloadFormData.append("companyName", companyName);
@@ -164,6 +172,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
 
     console.log("Forwarding multipart payload to Azure validator:", {
       documentType,
+      azureDocumentType,
       companyName,
       conversationId,
       tradeLicenseNumber,

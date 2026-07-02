@@ -48,10 +48,316 @@ function getResultValue(results: Record<string, { value?: string }>, keys: strin
   return '';
 }
 
-function getExpectedAcceptanceDocumentType(documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
+function getAgentDecisionDocumentType(documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
   if (documentType === 'trade_license') return 'trade';
   if (documentType === 'vat_certificate') return 'vat';
   return 'bank';
+}
+
+type AgentDocumentAcceptance = NonNullable<DocumentVerification['documentAcceptance']>;
+
+type AgentExtractionResponse = {
+  status?: string;
+  score?: number | null;
+  processingTimeMs?: number;
+  processingTime?: string;
+  results?: Record<string, { value?: string; confidence?: number }>;
+  raw_results?: Record<string, unknown> | null;
+  documentAcceptance?: AgentDocumentAcceptance | null;
+  extractedData?: Record<string, string>;
+  extraction?: {
+    document_type?: string;
+    results?: Record<string, { value?: string; confidence?: number }>;
+    raw_results?: Record<string, unknown> | null;
+    llm_extraction?: Record<string, unknown> | null;
+    qr_codes?: Record<string, unknown> | null;
+    verification_urls?: Record<string, unknown> | null;
+    logo?: Record<string, unknown> | boolean | null;
+    gpt_review?: {
+      is_consistent?: boolean;
+      anomalies?: string[];
+      plausibility_score?: number;
+      reasoning?: string;
+    } | null;
+    score?: number | null;
+  } | null;
+  llm_extraction?: Record<string, unknown> | null;
+  llmExtraction?: Record<string, unknown> | null;
+  qr_codes?: Record<string, unknown> | null;
+  verification_urls?: Record<string, unknown> | null;
+  logo?: Record<string, unknown> | boolean | null;
+  gpt_review?: {
+    is_consistent?: boolean;
+    anomalies?: string[];
+    plausibility_score?: number;
+    reasoning?: string;
+  } | null;
+  gptReview?: {
+    is_consistent?: boolean;
+    anomalies?: string[];
+    plausibility_score?: number;
+    reasoning?: string;
+  };
+  rawResponse?: Record<string, any>;
+  requestContext?: {
+    company_name?: string | null;
+    conversation_id?: string | null;
+    trade_license_number?: string | null;
+    document_context?: unknown;
+    context_hint?: unknown;
+  };
+};
+
+function getAgent2ExtractionSource(analyzeData: any) {
+  const extraction = analyzeData?.extraction && typeof analyzeData.extraction === 'object'
+    ? analyzeData.extraction
+    : {};
+  const rawResponse = analyzeData?.rawResponse && typeof analyzeData.rawResponse === 'object'
+    ? analyzeData.rawResponse
+    : {};
+  const rawExtraction = rawResponse.extraction && typeof rawResponse.extraction === 'object'
+    ? rawResponse.extraction
+    : {};
+
+  return { extraction, rawResponse, rawExtraction };
+}
+
+type AgentTbmsReconciliationResponse = {
+  ok?: boolean;
+  status?: string;
+  agent?: {
+    name?: string;
+    version?: string;
+  };
+  document_type?: string;
+  context?: {
+    conversation_id?: string;
+  };
+  state?: {
+    conversation_entities?: {
+      company_name?: string;
+      trade_license_number?: string;
+    };
+    trusted_trade_document?: Record<string, unknown>;
+    case_state?: {
+      document_type?: string;
+      validation_status?: string;
+    };
+  };
+  validation?: AgentDocumentAcceptance;
+  company_match?: {
+    requested_company_name?: string;
+    requested_company_name_normalized?: string;
+    matched_company_name?: string;
+    matched_company_name_normalized?: string;
+    exact_match?: boolean;
+    similarity_percent?: number;
+    match_status?: string;
+  };
+  tbms_match?: {
+    status?: string;
+    license_match?: boolean;
+  };
+  score?: number;
+  recommended_action?: string;
+  thresholds?: {
+    approved?: number;
+    review?: number;
+  };
+  text?: string;
+};
+
+type AgentApprovalReviewResponse = {
+  ok?: boolean;
+  status?: string;
+  agent?: {
+    name?: string;
+    version?: string;
+  };
+  context?: {
+    conversation_id?: string;
+  };
+  state?: {
+    conversation_entities?: {
+      company_name?: string;
+      trade_license_number?: string;
+    };
+    trusted_trade_document?: Record<string, unknown>;
+    case_state?: {
+      final_decision?: string;
+      case_status?: string;
+    };
+  };
+  validation?: AgentDocumentAcceptance;
+  gpt_review?: {
+    is_consistent?: boolean;
+    anomalies?: string[];
+    plausibility_score?: number;
+    reasoning?: string;
+  };
+  final_decision?: string;
+  workflow_action?: string;
+  case_status?: string;
+  score?: number;
+  thresholds?: {
+    approved?: number;
+    review?: number;
+  };
+  text?: string;
+};
+
+function normalizeDocumentDecision(value?: string | null) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized.includes('expired')) return 'expired';
+  if (normalized.includes('auto-approve') || normalized.includes('auto_approve') || normalized.includes('approved')) return 'approved';
+  if (normalized.includes('review')) return 'review';
+  if (normalized.includes('reject')) return 'rejected';
+  return normalized;
+}
+
+function normalizeAgentDocumentAcceptance(
+  decision: AgentDocumentAcceptance | null | undefined,
+  fallbackDocumentType: 'trade' | 'vat' | 'bank'
+): AgentDocumentAcceptance | null {
+  if (!decision) {
+    return null;
+  }
+
+  return {
+    document_type: decision.document_type || fallbackDocumentType,
+    status: decision.status || 'review',
+    score: typeof decision.score === 'number' ? decision.score : undefined,
+    missing_fields: Array.isArray(decision.missing_fields) ? decision.missing_fields : [],
+    reasons: Array.isArray(decision.reasons) ? decision.reasons : [],
+    acceptable: typeof decision.acceptable === 'boolean' ? decision.acceptable : undefined,
+    expiry_date: decision.expiry_date,
+    is_expired: decision.is_expired,
+    company_match: decision.company_match,
+    tbms_match: decision.tbms_match,
+    recommended_action: decision.recommended_action,
+  };
+}
+
+function buildAgent2ExtractionPayload(
+  extractionResponse: AgentExtractionResponse,
+  agentDocumentType: 'trade' | 'vat' | 'bank'
+) {
+  const rawResponse = extractionResponse.rawResponse || {};
+  const rawExtraction = (rawResponse.extraction && typeof rawResponse.extraction === 'object'
+    ? rawResponse.extraction
+    : {}) as Record<string, any>;
+
+  const results =
+    rawExtraction.results ||
+    rawExtraction.raw_results ||
+    extractionResponse.results ||
+    rawResponse.results ||
+    rawResponse.raw_results ||
+    {};
+
+  const llmExtraction =
+    rawExtraction.llm_extraction ||
+    rawExtraction.llmExtraction ||
+    rawResponse.llm_extraction ||
+    rawResponse.llmExtraction ||
+    extractionResponse.llm_extraction ||
+    extractionResponse.llmExtraction ||
+    null;
+
+  const qrCodes =
+    rawExtraction.qr_codes ||
+    rawResponse.qr_codes ||
+    extractionResponse.qr_codes ||
+    null;
+
+  const verificationUrls =
+    rawExtraction.verification_urls ||
+    rawResponse.verification_urls ||
+    extractionResponse.verification_urls ||
+    null;
+
+  const logo =
+    rawExtraction.logo ||
+    rawResponse.logo ||
+    extractionResponse.logo ||
+    null;
+
+  const gptReview =
+    rawExtraction.gpt_review ||
+    rawExtraction.gptReview ||
+    rawResponse.gpt_review ||
+    rawResponse.gptReview ||
+    extractionResponse.gpt_review ||
+    extractionResponse.gptReview ||
+    null;
+
+  const score =
+    extractionResponse.score ??
+    rawExtraction.score ??
+    rawExtraction.plausibility_score ??
+    rawResponse.score ??
+    rawResponse.plausibility_score ??
+    gptReview?.plausibility_score ??
+    null;
+
+  return {
+    ...rawExtraction,
+    document_type: agentDocumentType,
+    results,
+    raw_results: rawExtraction.raw_results || rawResponse.raw_results || extractionResponse.raw_results || null,
+    llm_extraction: llmExtraction,
+    llmExtraction: llmExtraction,
+    qr_codes: qrCodes,
+    verification_urls: verificationUrls,
+    logo,
+    gpt_review: gptReview,
+    gptReview: gptReview,
+    score,
+  };
+}
+
+function buildReconciliationPayload(
+  documentType: 'trade_license' | 'vat_certificate' | 'bank_document',
+  registrationState: SupplierRegistrationState,
+  uploadContext: {
+    companyName?: string;
+    conversationId?: string | null;
+    tradeLicenseNumber?: string;
+    documentContext?: Record<string, unknown> | string | null;
+    contextHint?: Record<string, unknown> | string | null;
+  } | undefined,
+  extractionResponse: AgentExtractionResponse
+) {
+  const agentDocumentType = getAgentDecisionDocumentType(documentType);
+  const requestedCompanyName =
+    uploadContext?.companyName?.trim() ||
+    registrationState.companyName?.trim() ||
+    String(extractionResponse.requestContext?.company_name || '').trim() ||
+    String((uploadContext?.contextHint as Record<string, any> | undefined)?.entities?.company_name || '').trim();
+
+  const requestedLicenseNumber =
+    uploadContext?.tradeLicenseNumber?.trim() ||
+    registrationState.tradeLicenseNumber?.trim() ||
+    extractionResponse.extractedData?.licenseNumber?.trim() ||
+    getResultValue(extractionResponse.results || {}, ['LicenseNo', 'LicenceNo', 'LicenseNumber']) ||
+    getResultValue(extractionResponse.rawResponse?.results || {}, ['LicenseNo', 'LicenceNo', 'LicenseNumber']) ||
+    '';
+  const agent2Extraction = buildAgent2ExtractionPayload(extractionResponse, agentDocumentType);
+
+  return {
+    document_type: agentDocumentType,
+    company_name: requestedCompanyName,
+    company_name_hint: requestedCompanyName,
+    extraction: agent2Extraction,
+    tbms_record: {
+      vendor_name: requestedCompanyName,
+      license_no: requestedLicenseNumber,
+    },
+    context: {
+      conversation_id: uploadContext?.conversationId || extractionResponse.requestContext?.conversation_id || null,
+    },
+  };
 }
 
 function createWelcomeMessage(): ChatMessage {
@@ -63,30 +369,26 @@ function createWelcomeMessage(): ChatMessage {
   };
 }
 
-function normalizeCompanyName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[\(\)\[\],.;\-_/]/g, ' ')
-    .replace(/\b(l\s*\.?\s*l\s*\.?\s*c|llc|ltd|limited|corp|corporation|co|company|sole\s+proprietorship|proprietorship|establishment|branch|inc)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function companyNamesMatch(left: string, right: string) {
-  const normalizedLeft = normalizeCompanyName(left);
-  const normalizedRight = normalizeCompanyName(right);
-  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
-}
-
-function getBackendCompanyMatch(analyzeData: any) {
-  return analyzeData?.company_match || analyzeData?.rawResponse?.company_match || null;
-}
-
 function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
-  const rawResults = analyzeData?.results || analyzeData?.rawResponse?.results || {};
+  const { extraction, rawResponse, rawExtraction } = getAgent2ExtractionSource(analyzeData);
+  const rawResults =
+    extraction.results ||
+    rawExtraction.results ||
+    analyzeData?.results ||
+    rawResponse?.results ||
+    analyzeData?.raw_results ||
+    rawExtraction.raw_results ||
+    rawResponse?.raw_results ||
+    {};
+
   const normalized = analyzeData?.extractedData || {};
   const tradeName = getResultValue(rawResults, ['TradeName', 'CompanyName', 'OperatingName', 'LegalNameEnglish', 'BusinessName']);
   const companyName = tradeName || normalized.companyName || normalized.tradeName || '';
+  const licenseNumber = getResultValue(rawResults, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
+    getResultValue(rawExtraction.results, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
+    getResultValue(analyzeData?.results, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
+    normalized.licenseNumber ||
+    '';
 
   if (documentType === 'vat_certificate') {
     const vatNumber = getResultValue(rawResults, [
@@ -131,9 +433,7 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
     companyName: normalized.companyName || tradeName,
     businessName: normalized.businessName || getResultValue(rawResults, ['BusinessName']),
     legalNameEnglish: normalized.legalNameEnglish || getResultValue(rawResults, ['LegalNameEnglish']),
-    licenseNumber:
-      normalized.licenseNumber ||
-      getResultValue(rawResults, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']),
+    licenseNumber,
     issueDate: normalized.issueDate || getResultValue(rawResults, ['IssueDate']),
     expiryDate: normalized.expiryDate || getResultValue(rawResults, ['ExpiryDate']),
     activity: normalized.activity || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
@@ -268,279 +568,288 @@ export default function App() {
         body: formData
       });
 
-      const analyzeData = await analyzeRes.json();
+      const analyzeData = (await analyzeRes.json()) as AgentExtractionResponse;
       if (!analyzeRes.ok || analyzeData.status !== 'success') {
-        throw new Error(analyzeData.message || 'Image AI scanning phase failed.');
+        throw new Error((analyzeData as any).message || 'Image AI scanning phase failed.');
       }
 
       const extracted = mergeOcrExtraction(analyzeData, type);
-      console.log("OCR Extracted values:", extracted);
-      const documentAcceptance = analyzeData.documentAcceptance || analyzeData.rawResponse?.document_acceptance || null;
-      const backendCompanyMatch = getBackendCompanyMatch(analyzeData);
+      const agentDocumentType = getAgentDecisionDocumentType(type);
       const ocrResults = analyzeData.results || analyzeData.rawResponse?.results || {};
-      const enteredCompanyName = registrationState.companyName || '';
-      const extractedCompanyName = getDisplayOcrName(extracted);
-      const backendCompanyMatchState = backendCompanyMatch
-        ? String(backendCompanyMatch.match_status || '').toLowerCase()
-        : '';
-      const companyMatchState = backendCompanyMatchState || (
-        (!enteredCompanyName ||
-          !extractedCompanyName ||
-          companyNamesMatch(enteredCompanyName, extractedCompanyName))
-          ? 'exact'
-          : 'mismatch'
+      const requestCompanyName =
+        uploadContext?.companyName?.trim() ||
+        registrationState.companyName?.trim() ||
+        String(analyzeData.requestContext?.company_name || '').trim() ||
+        '';
+      const requestLicenseNumber =
+        uploadContext?.tradeLicenseNumber?.trim() ||
+        registrationState.tradeLicenseNumber?.trim() ||
+        String(analyzeData.requestContext?.trade_license_number || '').trim() ||
+        String(extracted.licenseNumber || '').trim();
+      const requestConversationId =
+        uploadContext?.conversationId ||
+        analyzeData.requestContext?.conversation_id ||
+        null;
+
+      const agent2Acceptance = normalizeAgentDocumentAcceptance(
+        analyzeData.documentAcceptance || analyzeData.rawResponse?.document_acceptance || null,
+        agentDocumentType
       );
-      const companyMatches = companyMatchState === 'exact' || companyMatchState === 'close';
-      const companyNeedsReview = companyMatchState === 'close';
-      const companyMismatchReason = companyMatchState === 'mismatch'
-        ? backendCompanyMatch
-          ? `Company name mismatch. Requested: "${backendCompanyMatch.requested_company_name || enteredCompanyName}". Matched: "${backendCompanyMatch.matched_company_name || extractedCompanyName}".`
-          : `Company name mismatch. Entered: "${enteredCompanyName}". OCR: "${extractedCompanyName}".`
-        : '';
-      const acceptanceStatus = String(documentAcceptance?.status || (documentAcceptance?.acceptable ? 'approved' : '')).toLowerCase();
-      const expectedDocumentType = getExpectedAcceptanceDocumentType(type);
-      const returnedDocumentType = String(documentAcceptance?.document_type || '').trim().toLowerCase();
-      const documentTypeMatches = !returnedDocumentType || returnedDocumentType === expectedDocumentType;
-      const documentTypeMismatchReason = !documentTypeMatches
-        ? `Please upload the correct ${expectedDocumentType.toUpperCase()} document for this step.`
-        : '';
-      const decisionLabel =
-        companyMatchState === 'mismatch'
-          ? 'REJECTED'
-          : !documentTypeMatches
-            ? 'REJECTED'
-            : companyNeedsReview || acceptanceStatus === 'review'
-            ? 'REVIEW'
-            : companyMatches && acceptanceStatus === 'approved'
-          ? 'APPROVED'
-            : 'REJECTED';
-      const effectiveDocumentAcceptance = companyMatchState === 'exact' && documentTypeMatches
-        ? documentAcceptance
-        : companyNeedsReview && documentTypeMatches
-          ? {
-              ...(documentAcceptance || {}),
-              status: 'review',
-              acceptable: true,
-              reasons: [
-                ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
-                `Company match is close. Requested: "${backendCompanyMatch?.requested_company_name || enteredCompanyName}". Matched: "${backendCompanyMatch?.matched_company_name || extractedCompanyName}".`,
-              ].filter(Boolean),
-            }
-          : {
-              ...(documentAcceptance || {}),
-              status: 'rejected',
-              acceptable: false,
-              reasons: [
-                ...(Array.isArray(documentAcceptance?.reasons) ? documentAcceptance.reasons : []),
-                companyMismatchReason,
-                documentTypeMismatchReason,
-              ].filter(Boolean),
-            };
-      const backendAcceptanceReasons = Array.isArray(effectiveDocumentAcceptance?.reasons)
-        ? effectiveDocumentAcceptance.reasons.map(reason => String(reason).trim()).filter(Boolean)
-        : [];
-      const backendAcceptanceReasonText = backendAcceptanceReasons.join(' ');
-      const backendIsExpired = typeof effectiveDocumentAcceptance?.is_expired === 'boolean'
-        ? effectiveDocumentAcceptance.is_expired
-        : null;
-      const isDocumentExpired =
-        backendIsExpired === true ||
-        backendAcceptanceReasons.some(reason => reason.toLowerCase().includes('expired'));
-      const effectiveFinalStatus: DocumentVerification['status'] =
-        companyMatchState === 'mismatch'
-          ? 'failed'
-          : !documentTypeMatches
-            ? 'failed'
-            : companyNeedsReview || acceptanceStatus === 'review'
-            ? 'review'
-            : companyMatches && acceptanceStatus === 'approved'
-          ? 'verified'
-            : 'failed';
-      const formatUserFacingRejectionReason = (reasonText: string) => {
-        const normalized = reasonText.toLowerCase();
-        if (!normalized) {
-          return 'We could not approve this document because one or more checks did not pass.';
-        }
 
-        if (normalized.includes('company name') && normalized.includes('does not match')) {
-          return 'The company name on the document does not match the company name we received.';
-        }
+      const reconciliationPayload = buildReconciliationPayload(
+        type,
+        registrationState,
+        {
+          ...uploadContext,
+          companyName: requestCompanyName,
+          conversationId: requestConversationId,
+          tradeLicenseNumber: requestLicenseNumber,
+        },
+        analyzeData
+      );
 
-        if (normalized.includes('expired')) {
-          return 'The uploaded document appears to be expired.';
-        }
-
-        if (normalized.includes('fraud risk') || normalized.includes('plausibility score') || normalized.includes('gpt review')) {
-          return 'The document authenticity check did not reach the required confidence level.';
-        }
-
-        if (normalized.includes('document type')) {
-          return 'The uploaded document does not match the current step in the onboarding flow.';
-        }
-
-        if (normalized.includes('missing')) {
-          return 'Some required details are missing from the uploaded document.';
-        }
-
-        if (normalized.includes('verification url present')) {
-          return 'An official verification link was found on the document.';
-        }
-
-        if (normalized.includes('logo present')) {
-          return 'The company logo was detected on the document.';
-        }
-
-        if (normalized.includes('qr code present')) {
-          return 'A QR code was detected and used as a verification signal.';
-        }
-
-        if (normalized.includes('expert review contribution')) {
-          return 'The document received an expert review as part of the verification process.';
-        }
-
-        if (normalized.includes('+') && normalized.match(/\+\d+/)) {
-          return 'The document received an expert review as part of the verification process.';
-        }
-
-        if (normalized.includes('verification signals')) {
-          return 'The document includes the expected verification signals.';
-        }
-
-        return reasonText;
-      };
-
-      const formatUserFacingReviewNote = (noteText: string) => {
-        const normalized = noteText.toLowerCase();
-
-        if (normalized.includes('close match')) {
-          return 'The company name is a close match and needs a quick review before approval.';
-        }
-
-        if (normalized.includes('company name') && normalized.includes('review')) {
-          return 'The company name needs a quick review before approval.';
-        }
-
-        return noteText || 'The document needs a quick review before approval.';
-      };
-
-      const friendlyRejectionReason = !documentTypeMatches
-        ? documentTypeMismatchReason
-        : companyMatchState === 'mismatch'
-          ? formatUserFacingRejectionReason(companyMismatchReason || backendAcceptanceReasonText)
-          : companyNeedsReview
-            ? 'The company name is a close match and needs a quick review before approval.'
-            : backendAcceptanceReasonText
-              ? formatUserFacingRejectionReason(backendAcceptanceReasonText)
-              : isDocumentExpired
-                ? 'The uploaded document appears to be expired.'
-                : 'We could not approve this document because one or more checks did not pass.';
-      const friendlyNextStep = 'Please upload a clearer or corrected document so we can continue.';
-
-      // 3. Mark OCR success and prompt the registry check starting
-      setRegistrationState(prev => {
-        const doc = prev.documents[type];
-        return {
-          ...prev,
-          documents: {
-            ...prev.documents,
-            [type]: {
-              ...doc,
-              status: 'ocr_completed',
-              extractedData: extracted,
-              ocrResults,
-              documentAcceptance: effectiveDocumentAcceptance,
-              processingTimeMs: analyzeData.processingTimeMs,
-              processingTime: analyzeData.processingTime,
-              validationLogs: [
-                ...doc.validationLogs,
-                `Clean fields successfully populated.`,
-                `Processing Time: ${analyzeData.processingTime || (typeof analyzeData.processingTimeMs === 'number' ? `${(analyzeData.processingTimeMs / 1000).toFixed(2)}s` : 'N/A')}`,
-                `Trade Name parsed: "${getDisplayTradeName(extracted)}"`,
-                `Company Name matched: "${getDisplayOcrName(extracted)}"`,
-                `Identification ID parsed: "${Object.values(extracted)[0] || 'N/A'}"`,
-                `Acceptance Decision: ${decisionLabel}`,
-                documentTypeMatches
-                  ? 'Document type matched the active workflow step.'
-                  : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
-                !companyMatches ? `Company name mismatch: ${companyMismatchReason}` : companyNeedsReview ? 'Company name close match sent for review.' : 'Company name aligned.',
-                ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
-                  ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
-                  : [])
-              ]
-            }
-          }
-        };
+      const reconciliationRes = await fetch('/api/agent-tbms-reconciliation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reconciliationPayload),
       });
 
-      // Quick visual delay transition to registry verification
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      if (effectiveFinalStatus === 'review') {
-        setRegistrationState(prev => {
-          const doc = prev.documents[type];
-          return {
-            ...prev,
-            documents: {
-              ...prev.documents,
-              [type]: {
-                ...doc,
-                status: 'review',
-              }
-            }
-          };
-        });
-      } else {
-        setRegistrationState(prev => {
-          const doc = prev.documents[type];
-          return {
-            ...prev,
-            documents: {
-              ...prev.documents,
-              [type]: {
-                ...doc,
-                status: effectiveFinalStatus,
-              }
-            }
-          };
-        });
+      const reconciliationData = (await reconciliationRes.json()) as AgentTbmsReconciliationResponse;
+      if (!reconciliationRes.ok || reconciliationData.ok === false || reconciliationData.status === 'error') {
+        throw new Error((reconciliationData as any).text || 'TBMS reconciliation failed.');
       }
+
+      const reconciliationDecision = normalizeDocumentDecision(
+        reconciliationData.recommended_action ||
+        reconciliationData.validation?.status ||
+        reconciliationData.state?.case_state?.validation_status
+      );
+      const needsApprovalReview =
+        reconciliationDecision === 'review' ||
+        reconciliationDecision === '' ||
+        reconciliationDecision === 'escalate_for_review';
+
+      let finalValidation = normalizeAgentDocumentAcceptance(
+        reconciliationData.validation || agent2Acceptance,
+        agentDocumentType
+      );
+      let approvalReviewData: AgentApprovalReviewResponse | null = null;
+      let finalDecision = reconciliationDecision || normalizeDocumentDecision(finalValidation?.status) || 'rejected';
+
+      const finalValidationHasCompanyMismatch = Boolean(
+        String(finalValidation?.company_match?.match_status || '').toLowerCase() === 'mismatch' ||
+        String(finalValidation?.tbms_match?.status || '').toLowerCase() === 'mismatch' ||
+        String(reconciliationData.company_match?.match_status || '').toLowerCase() === 'mismatch' ||
+        String(reconciliationData.tbms_match?.status || '').toLowerCase() === 'mismatch' ||
+        /company name mismatch|does not match/i.test(
+          [
+            ...(Array.isArray(finalValidation?.reasons) ? finalValidation.reasons : []),
+            reconciliationData.validation?.reasons?.join(' ') || '',
+            reconciliationData.text || '',
+          ].join(' ')
+        )
+      );
+
+      if (needsApprovalReview && finalDecision !== 'approved') {
+        const agentExtractionForDecision = buildAgent2ExtractionPayload(analyzeData, agentDocumentType);
+
+        const agentReconciliationForDecision = {
+          ...reconciliationData,
+          document_type: reconciliationData.document_type || agentDocumentType,
+          company_name: requestCompanyName,
+          company_name_hint: requestCompanyName,
+          tbms_record: {
+            vendor_name: requestCompanyName,
+            license_no: requestLicenseNumber,
+          },
+          context: {
+            conversation_id: requestConversationId,
+          },
+        };
+
+        const approvalPayload = {
+          document_type: agentDocumentType,
+          company_name: requestCompanyName,
+          company_name_hint: requestCompanyName,
+          extraction: agentExtractionForDecision,
+          reconciliation: agentReconciliationForDecision,
+          tbms_record: {
+            vendor_name: requestCompanyName,
+            license_no: requestLicenseNumber,
+          },
+          context: {
+            conversation_id: requestConversationId,
+          },
+        };
+
+        const approvalRes = await fetch('/api/agent-approval-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(approvalPayload),
+        });
+
+        approvalReviewData = (await approvalRes.json()) as AgentApprovalReviewResponse;
+        if (!approvalRes.ok || approvalReviewData.ok === false || approvalReviewData.status === 'error') {
+          throw new Error((approvalReviewData as any).text || 'Final approval review failed.');
+        }
+
+        finalDecision = normalizeDocumentDecision(
+          approvalReviewData.final_decision ||
+          approvalReviewData.validation?.status ||
+          finalDecision
+        ) || finalDecision;
+
+        const approvalReviewValidation = normalizeAgentDocumentAcceptance(
+          approvalReviewData.validation || finalValidation,
+          agentDocumentType
+        );
+        finalValidation = approvalReviewValidation
+          ? {
+              ...approvalReviewValidation,
+              status: finalDecision as AgentDocumentAcceptance['status'],
+              recommended_action:
+                approvalReviewData.workflow_action ||
+                approvalReviewValidation.recommended_action ||
+                finalDecision,
+              acceptable: finalDecision === 'approved',
+              reasons: finalDecision === 'approved'
+                ? (approvalReviewValidation.reasons?.length
+                    ? approvalReviewValidation.reasons
+                    : ['The document was approved after verification checks.'])
+                : finalDecision === 'review'
+                  ? (approvalReviewData.text
+                      ? [approvalReviewData.text]
+                      : approvalReviewValidation.reasons?.length
+                        ? approvalReviewValidation.reasons
+                        : ['The document needs a quick review before approval.'])
+                  : (approvalReviewData.text
+                      ? [approvalReviewData.text]
+                      : approvalReviewValidation.reasons?.length
+                        ? approvalReviewValidation.reasons
+                        : ['The document could not be approved after verification checks.']),
+            }
+          : approvalReviewValidation;
+      }
+
+      const finalValidationHasExpiry = Boolean(
+        finalValidation?.is_expired ||
+        reconciliationData.validation?.is_expired ||
+        agent2Acceptance?.is_expired
+      );
+      const uiDecision = finalValidationHasCompanyMismatch
+        ? 'rejected'
+        : finalValidationHasExpiry
+          ? 'expired'
+          : finalDecision;
+
+      if (finalValidation) {
+        finalValidation = {
+          ...finalValidation,
+          status: finalDecision as AgentDocumentAcceptance['status'],
+          recommended_action:
+            finalValidation.recommended_action ||
+            reconciliationData.recommended_action ||
+            finalDecision,
+          acceptable: finalDecision === 'approved',
+          reasons:
+            finalValidation.reasons?.length
+              ? finalValidation.reasons
+              : finalDecision === 'approved'
+                ? ['The document was approved after verification checks.']
+                : finalDecision === 'review'
+                  ? ['The document needs a quick review before approval.']
+                  : ['The document could not be approved after verification checks.'],
+        };
+      }
+
+      const finalStatus: DocumentVerification['status'] =
+        finalDecision === 'approved'
+          ? 'verified'
+          : finalDecision === 'review'
+            ? 'review'
+            : 'failed';
+
+      const decisionLabel = uiDecision === 'approved'
+        ? 'APPROVED'
+        : uiDecision === 'review'
+          ? 'REVIEW'
+          : uiDecision === 'expired'
+            ? 'EXPIRED'
+            : 'REJECTED';
+
+      const issueReasonSource = Array.isArray(finalValidation?.reasons) && finalValidation.reasons.length > 0
+        ? finalValidation.reasons.join(' ')
+        : approvalReviewData?.text || reconciliationData.text || '';
+      const friendlyReason = issueReasonSource || (
+        uiDecision === 'approved'
+          ? 'The document was approved after extraction and TBMS reconciliation.'
+          : uiDecision === 'expired'
+            ? 'The document appears to be expired.'
+          : uiDecision === 'review'
+            ? 'The document needs a quick review before approval.'
+            : 'The document could not be approved after verification checks.'
+      );
+      const friendlyNextStep = uiDecision === 'approved'
+        ? (
+          type === 'trade_license'
+            ? "Let's move onto Step 3. Please provide your company's VAT Certificate."
+            : type === 'vat_certificate'
+              ? 'Great! We are almost done. Please provide your official Bank Document (Ownership Statement).'
+              : 'All requested parameters are verified! Please review the score card on the right, and submit your registration profile.'
+        )
+        : finalValidationHasExpiry
+          ? 'Please upload a current document with a valid expiry date so we can continue.'
+          : 'Please upload a clearer or corrected document so we can continue.';
+
+      const finalLogEntries = [
+        `Agent 2: Document extraction completed.`,
+        `Agent 3: TBMS reconciliation ${reconciliationDecision || 'completed'}.`,
+        ...(approvalReviewData ? [`Agent 4: Final approval review ${finalDecision}.`] : []),
+        `Decision: ${decisionLabel}`,
+        finalValidation?.document_type ? `Document Type: ${finalValidation.document_type}` : 'Document Type: N/A',
+        finalValidation?.score !== undefined ? `Review Score: ${finalValidation.score}` : 'Review Score: N/A',
+        Array.isArray(finalValidation?.reasons) && finalValidation.reasons.length > 0
+          ? `Reasons: ${finalValidation.reasons.join(' ')}`
+          : 'Reasons: N/A',
+      ];
 
       setRegistrationState(prev => {
         const doc = prev.documents[type];
         const updatedDoc: DocumentVerification = {
           ...doc,
-          status: effectiveFinalStatus,
+          status: finalStatus,
+          extractedData: extracted,
+          ocrResults,
+          documentAcceptance: finalValidation,
+          processingTimeMs: analyzeData.processingTimeMs,
+          processingTime: analyzeData.processingTime,
+          agent2Response: analyzeData,
+          agent3Response: reconciliationData,
+          agent4Response: approvalReviewData,
           registryMatch: {
-            matched: effectiveFinalStatus === 'verified',
-            registeredName: getDisplayOcrName(extracted),
-            status: effectiveFinalStatus === 'verified' ? 'ACTIVE' : 'NOT_FOUND',
-            details: effectiveDocumentAcceptance
-              ? `Document acceptance status: ${decisionLabel}.`
-              : 'Document acceptance response unavailable.',
+            matched: finalStatus === 'verified',
+            registeredName: extracted.companyName || extracted.tradeName || requestCompanyName || 'N/A',
+            status: finalStatus === 'verified' ? 'ACTIVE' : 'NOT_FOUND',
+            details: approvalReviewData?.workflow_action
+              ? `Final workflow action: ${approvalReviewData.workflow_action}.`
+              : reconciliationData?.recommended_action
+                ? `Recommended action: ${reconciliationData.recommended_action}.`
+                : `Final decision: ${decisionLabel}.`,
           },
-          documentAcceptance: effectiveDocumentAcceptance,
           validationLogs: [
             ...doc.validationLogs,
-            `Document Acceptance Decision: ${decisionLabel}`,
-            effectiveDocumentAcceptance?.document_type ? `Document Type: ${effectiveDocumentAcceptance.document_type}` : 'Document Type: N/A',
-            documentTypeMatches
-              ? 'Document type matched the active workflow step.'
-              : `Document type mismatch: expected ${expectedDocumentType.toUpperCase()}, received ${returnedDocumentType || 'N/A'}.`,
-            !companyMatches ? `Company name mismatch: ${companyMismatchReason}` : companyNeedsReview ? 'Company name close match sent for review.' : 'Company name aligned.',
-            ...(Array.isArray(effectiveDocumentAcceptance?.reasons) && effectiveDocumentAcceptance.reasons.length > 0
-              ? effectiveDocumentAcceptance.reasons.map((reason: string) => `Acceptance reason: ${reason}`)
-              : []),
-            effectiveFinalStatus === 'verified'
-              ? 'Compliance Checklist APPROVED.'
-              : effectiveFinalStatus === 'review'
-                ? 'Compliance Status: REVIEW REQUIRED.'
-                : 'Compliance Alert: Document rejected by backend acceptance rules.'
-          ]
+            `Agent 2 extraction completed in ${analyzeData.processingTime || (typeof analyzeData.processingTimeMs === 'number' ? `${(analyzeData.processingTimeMs / 1000).toFixed(2)}s` : 'N/A')}.`,
+            `Agent 3 reconciliation decision: ${reconciliationDecision || 'N/A'}.`,
+            ...(approvalReviewData ? [`Agent 4 final decision: ${finalDecision}.`] : []),
+            `OCR company: "${getDisplayOcrName(extracted)}"`,
+            `Trade name: "${getDisplayTradeName(extracted)}"`,
+            `Result status: ${decisionLabel}`,
+            ...finalLogEntries,
+          ],
         };
 
-        // Determine next sequence stage
         let nextStep = prev.currentStep;
-        if (effectiveFinalStatus === 'verified') {
+        if (finalStatus === 'verified') {
           if (type === 'trade_license') nextStep = 'vat_upload';
           else if (type === 'vat_certificate') nextStep = 'bank_document_upload';
           else if (type === 'bank_document') nextStep = 'review';
@@ -548,46 +857,65 @@ export default function App() {
 
         return {
           ...prev,
-          companyName: prev.companyName || extracted.companyName || extracted.tradeName || '',
-          tradeLicenseNumber: prev.tradeLicenseNumber || extracted.licenseNumber || '',
+          companyName: prev.companyName || requestCompanyName || extracted.companyName || extracted.tradeName || '',
+          tradeLicenseNumber: prev.tradeLicenseNumber || requestLicenseNumber || extracted.licenseNumber || '',
           vatNumber: prev.vatNumber || extracted.taxRegistrationNumber || extracted.vatNumber || '',
           currentStep: nextStep,
           documents: {
             ...prev.documents,
-            [type]: updatedDoc
+            [type]: updatedDoc,
           },
           registryChecks: {
             ...prev.registryChecks,
-            tradeLicenseVerified: type === 'trade_license' ? effectiveFinalStatus === 'verified' : prev.registryChecks.tradeLicenseVerified,
-            vatVerified: type === 'vat_certificate' ? effectiveFinalStatus === 'verified' : prev.registryChecks.vatVerified,
-            bankDocumentVerified: type === 'bank_document' ? effectiveFinalStatus === 'verified' : prev.registryChecks.bankDocumentVerified
-          }
+            tradeLicenseVerified: type === 'trade_license' ? finalStatus === 'verified' : prev.registryChecks.tradeLicenseVerified,
+            vatVerified: type === 'vat_certificate' ? finalStatus === 'verified' : prev.registryChecks.vatVerified,
+            bankDocumentVerified: type === 'bank_document' ? finalStatus === 'verified' : prev.registryChecks.bankDocumentVerified,
+          },
         };
       });
 
-      // 6. Write explanation of compliance checks outcome into chatbot history
       await streamChatMessage(
         setChatHistory,
-        effectiveFinalStatus === 'verified'
+        uiDecision === 'approved'
           ? `[[DOCUMENT_ACCEPTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Agent 2: Extraction completed.
+Agent 3: TBMS reconciliation completed.
+${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
 Acceptance Status: Approved
 Next Step: ${
               type === 'trade_license'
                 ? "Let's move onto Step 3. Please provide your company's VAT Certificate."
                 : type === 'vat_certificate'
-                ? "Great! We are almost done. Please provide your official Bank Document (Ownership Statement)."
-                : "All requested parameters are verified! Please review the score card on the right, and submit your registration profile."
+                  ? 'Great! We are almost done. Please provide your official Bank Document (Ownership Statement).'
+                  : 'All requested parameters are verified! Please review the score card on the right, and submit your registration profile.'
             }`
-          : effectiveFinalStatus === 'review'
+          : uiDecision === 'review'
             ? `[[DOCUMENT_REVIEW]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Review Note: ${formatUserFacingReviewNote('The company name is a close match and needs a quick review before approval.')}
+Agent 2: Extraction completed.
+Agent 3: TBMS reconciliation completed.
+${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
+Review Note: ${friendlyReason}
 Next Step: We will continue once the review is complete.`
-            : `[[DOCUMENT_REJECTED]]
-Rejection Summary: ${formatUserFacingRejectionReason(friendlyRejectionReason)}
+            : uiDecision === 'expired'
+              ? `[[DOCUMENT_EXPIRED]]
+Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
+OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Agent 2: Extraction completed.
+Agent 3: TBMS reconciliation completed.
+${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
+Expiry Note: ${friendlyReason}
+Next Step: ${friendlyNextStep}`
+          : `[[DOCUMENT_REJECTED]]
+Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
+OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+Agent 2: Extraction completed.
+Agent 3: TBMS reconciliation completed.
+${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
+Rejection Summary: ${friendlyReason}
 Next Step: ${friendlyNextStep}`
       );
 

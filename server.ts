@@ -11,8 +11,28 @@ const multipartUpload = multer({ storage: multer.memoryStorage() });
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "127.0.0.1";
 const GENERAL_BOT_ENDPOINT = process.env.GENERAL_BOT_ENDPOINT || "";
+const DOCUMENT_EXTRACTION_ENDPOINT =
+  process.env.DOCUMENT_EXTRACTION_ENDPOINT ||
+  process.env.TRADE_LICENSE_VALIDATE_ENDPOINT ||
+  process.env.VAT_VALIDATE_ENDPOINT ||
+  process.env.BANK_VALIDATE_ENDPOINT ||
+  "";
+const TBMS_RECONCILIATION_ENDPOINT =
+  process.env.TBMS_RECONCILIATION_ENDPOINT ||
+  process.env.TBMS_RECONCILIATION ||
+  "";
+const APPROVAL_REVIEW_ENDPOINT =
+  process.env.APPROVAL_REVIEW_ENDPOINT ||
+  process.env.HIDL_APPROVAL ||
+  "";
 
 type DocumentType = "trade_license" | "vat_certificate" | "bank_document";
+
+function mapAzureDocumentType(documentType: DocumentType) {
+  if (documentType === "trade_license") return "trade";
+  if (documentType === "vat_certificate") return "vat";
+  return "bank";
+}
 
 type AzureValidationResponse = {
   status?: string;
@@ -88,15 +108,15 @@ const VALIDATION_ENDPOINTS: Record<
   { url: string; ocrSource: string }
 > = {
   trade_license: {
-    url: process.env.TRADE_LICENSE_VALIDATE_ENDPOINT || "",
+    url: DOCUMENT_EXTRACTION_ENDPOINT,
     ocrSource: "azure_validate_trade_license",
   },
   vat_certificate: {
-    url: process.env.VAT_VALIDATE_ENDPOINT || "",
+    url: DOCUMENT_EXTRACTION_ENDPOINT,
     ocrSource: "azure_validate_vat",
   },
   bank_document: {
-    url: process.env.BANK_VALIDATE_ENDPOINT || "",
+    url: DOCUMENT_EXTRACTION_ENDPOINT,
     ocrSource: "azure_validate_bank_document",
   },
 };
@@ -448,12 +468,14 @@ app.post("/api/analyze-document", multipartUpload.single("file"), async (req, re
     const mimeTypeValue = uploadedFile.mimetype || mimeType || "application/octet-stream";
     const resolvedFileBuffer = uploadedFile.buffer;
     const fileBlob = new Blob([resolvedFileBuffer], { type: mimeTypeValue });
+    const azureDocumentType = mapAzureDocumentType(documentType as DocumentType);
     const formData = new FormData();
     formData.append(
       "file",
       fileBlob,
-      `${documentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
+      `${azureDocumentType}.${mimeTypeValue.includes("pdf") ? "pdf" : "bin"}`
     );
+    formData.append("document_type", azureDocumentType);
     formData.append("documentType", documentType);
     if (companyName) {
       formData.append("companyName", companyName);
@@ -478,6 +500,7 @@ app.post("/api/analyze-document", multipartUpload.single("file"), async (req, re
 
     console.log("Forwarding multipart payload to Azure validator:", {
       documentType,
+      azureDocumentType,
       companyName,
       conversationId,
       tradeLicenseNumber,
@@ -553,6 +576,82 @@ app.post("/api/analyze-document", multipartUpload.single("file"), async (req, re
     return res.status(500).json({
       status: "error",
       message: error.message || "Internal server error during document analysis"
+    });
+  }
+});
+
+app.post("/api/agent-tbms-reconciliation", async (req, res) => {
+  try {
+    if (!TBMS_RECONCILIATION_ENDPOINT) {
+      return res.status(500).json({ ok: false, status: "error", text: "TBMS reconciliation endpoint is not configured." });
+    }
+
+    const externalRes = await fetch(TBMS_RECONCILIATION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+
+    const rawResponse = await externalRes.text();
+    let parsedResponse: any;
+
+    try {
+      parsedResponse = JSON.parse(rawResponse);
+    } catch {
+      parsedResponse = {
+        ok: externalRes.ok,
+        status: externalRes.ok ? "completed" : "error",
+        text: rawResponse || "TBMS reconciliation returned a non-JSON response.",
+      };
+    }
+
+    return res.status(externalRes.status).json(parsedResponse);
+  } catch (error: any) {
+    console.error("Error in /api/agent-tbms-reconciliation:", error);
+    return res.status(500).json({
+      ok: false,
+      status: "error",
+      text: error.message || "Internal server error during TBMS reconciliation",
+    });
+  }
+});
+
+app.post("/api/agent-approval-review", async (req, res) => {
+  try {
+    if (!APPROVAL_REVIEW_ENDPOINT) {
+      return res.status(500).json({ ok: false, status: "error", text: "Approval review endpoint is not configured." });
+    }
+
+    const externalRes = await fetch(APPROVAL_REVIEW_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+
+    const rawResponse = await externalRes.text();
+    let parsedResponse: any;
+
+    try {
+      parsedResponse = JSON.parse(rawResponse);
+    } catch {
+      parsedResponse = {
+        ok: externalRes.ok,
+        status: externalRes.ok ? "completed" : "error",
+        text: rawResponse || "Approval review returned a non-JSON response.",
+      };
+    }
+
+    return res.status(externalRes.status).json(parsedResponse);
+  } catch (error: any) {
+    console.error("Error in /api/agent-approval-review:", error);
+    return res.status(500).json({
+      ok: false,
+      status: "error",
+      text: error.message || "Internal server error during approval review",
     });
   }
 });
