@@ -367,13 +367,18 @@ function extractVendorName(text: string) {
   return match?.[1]?.trim() || '';
 }
 
-function getFirstTbmsVendor(response: GeneralBotResponse) {
+function getTbmsVendors(response: GeneralBotResponse) {
   const vendors = (response as any)?.data?.data?.vendors;
-  return Array.isArray(vendors) && vendors.length > 0 ? vendors[0] : null;
+  return Array.isArray(vendors) ? vendors : [];
+}
+
+function getFirstTbmsVendor(response: GeneralBotResponse) {
+  const vendors = getTbmsVendors(response);
+  return vendors.length > 0 ? vendors[0] : null;
 }
 
 function hasTbmsVendorResults(response: GeneralBotResponse) {
-  return Boolean(getFirstTbmsVendor(response));
+  return getTbmsVendors(response).length > 0;
 }
 
 function getVendorDisplayName(response: GeneralBotResponse) {
@@ -555,7 +560,7 @@ export default function AIAgentChat({
   const [uaePhonePrefix, setUaePhonePrefix] = useState<'50' | '51' | '52' | '53' | '54' | '55' | '56' | '57' | '58' | '59'>('50');
   const [uaePhoneLocalNumber, setUaePhoneLocalNumber] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary | null>(null);
+  const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastConversationContextRef = useRef<GeneralBotResponse['context'] | null>(null);
@@ -569,7 +574,7 @@ export default function AIAgentChat({
   useEffect(() => {
     if (chatHistory.length === 0) {
       setConversationId(null);
-      setVendorLookupSummary(null);
+      setVendorLookupSummary([]);
       lastConversationContextRef.current = null;
     }
   }, [chatHistory.length]);
@@ -749,30 +754,33 @@ export default function AIAgentChat({
       });
 
       if (tbmsVendor) {
-        const lifecycleStatus = tbmsLifecycleStatus || getVendorLifecycleStatus(
-          String(tbmsVendor.expDate || ''),
-          String(tbmsVendor.approvalStatus || '')
-        );
+        const tbmsVendors = getTbmsVendors(data);
+        setVendorLookupSummary(tbmsVendors.map((vendor: any) => {
+          const lifecycleStatus = tbmsLifecycleStatus || getVendorLifecycleStatus(
+            String(vendor.expDate || ''),
+            String(vendor.approvalStatus || '')
+          );
 
-        setVendorLookupSummary({
-          companyName: String(tbmsVendor.vendName || vendorName || userText).trim(),
-          tradeLicenseNo: String(tbmsVendor.tradeLicenseNo || 'N/A'),
-          approvalStatus: String(tbmsVendor.approvalStatus || 'N/A'),
-          lifecycleStatus,
-          routeLabel: getVendorRouteLabel(lifecycleStatus),
-          expDate: String(tbmsVendor.expDate || 'N/A'),
-          issueAuthority: String(tbmsVendor.issueAuthority || 'N/A'),
-          address: String(tbmsVendor.address || 'N/A').replace(/\r?\n/g, ', '),
-          phone: String(tbmsVendor.tel || 'N/A'),
-          email: String(tbmsVendor.email || 'N/A').replace(/\.$/, ''),
-          website: String(tbmsVendor.website || 'N/A'),
-          chamberNo: String(tbmsVendor.chamberNo || 'N/A'),
-          businessActivity: String(tbmsVendor.tradeActivities || 'N/A'),
-        });
+          return {
+            companyName: String(vendor.vendName || vendorName || userText).trim(),
+            tradeLicenseNo: String(vendor.tradeLicenseNo || 'N/A'),
+            approvalStatus: String(vendor.approvalStatus || 'N/A'),
+            lifecycleStatus,
+            routeLabel: getVendorRouteLabel(lifecycleStatus),
+            expDate: String(vendor.expDate || 'N/A'),
+            issueAuthority: String(vendor.issueAuthority || 'N/A'),
+            address: String(vendor.address || 'N/A').replace(/\r?\n/g, ', '),
+            phone: String(vendor.tel || 'N/A'),
+            email: String(vendor.email || 'N/A').replace(/\.$/, ''),
+            website: String(vendor.website || 'N/A'),
+            chamberNo: String(vendor.chamberNo || 'N/A'),
+            businessActivity: String(vendor.tradeActivities || 'N/A'),
+          };
+        }));
       } else if (getStructuredSource(data) === 'tbms') {
-        setVendorLookupSummary(null);
+        setVendorLookupSummary([]);
       } else {
-        setVendorLookupSummary(null);
+        setVendorLookupSummary([]);
       }
 
       if (data.conversation_id) {
@@ -1355,64 +1363,82 @@ We will verify your company's credentials after the upload.`
           );
         })}
 
-        {vendorLookupSummary && (
+        {vendorLookupSummary.length > 0 && (
           <div className="max-w-[90%] mx-auto rounded-lg border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm space-y-3 animate-fade-in">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">Vendor Lookup Result</p>
-                <h3 className="text-sm font-bold text-slate-900 mt-1">{vendorLookupSummary.companyName}</h3>
+                <h3 className="text-sm font-bold text-slate-900 mt-1">
+                  {vendorLookupSummary[0]?.companyName || 'Vendor Matches'}
+                </h3>
               </div>
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                  vendorLookupSummary.lifecycleStatus === 'expired'
-                    ? 'text-rose-700 bg-rose-100 border-rose-200'
-                    : vendorLookupSummary.lifecycleStatus === 'renewal_due'
-                      ? 'text-amber-700 bg-amber-100 border-amber-200'
-                      : 'text-emerald-700 bg-emerald-100 border-emerald-200'
-                }`}
-              >
-                {getVendorBadgeLabel(vendorLookupSummary)}
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border text-emerald-700 bg-emerald-100 border-emerald-200">
+                {vendorLookupSummary.length} Match{vendorLookupSummary.length > 1 ? 'es' : ''}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
-              <div className="bg-white rounded border border-emerald-100 p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trade License No.</span>
-                <span className="font-mono font-semibold">{vendorLookupSummary.tradeLicenseNo}</span>
-              </div>
-              <div className="bg-white rounded border border-emerald-100 p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Expiry Date</span>
-                <span className="font-semibold">{vendorLookupSummary.expDate}</span>
-              </div>
-              <div className="bg-white rounded border border-emerald-100 p-2.5 sm:col-span-2">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Business Activity</span>
-                <span>{vendorLookupSummary.businessActivity}</span>
-              </div>
-              <div className="bg-white rounded border border-emerald-100 p-2.5 sm:col-span-2">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Address</span>
-                <span>{vendorLookupSummary.address}</span>
-              </div>
-            </div>
+            <div className="space-y-3">
+              {vendorLookupSummary.map((vendor, index) => (
+                <div key={`${vendor.tradeLicenseNo}-${index}`} className="rounded-lg border border-emerald-100 bg-white p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">Vendor {index + 1}</p>
+                      <h4 className="text-sm font-bold text-slate-900 mt-1">{vendor.companyName}</h4>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
+                        vendor.lifecycleStatus === 'expired'
+                          ? 'text-rose-700 bg-rose-100 border-rose-200'
+                          : vendor.lifecycleStatus === 'renewal_due'
+                            ? 'text-amber-700 bg-amber-100 border-amber-200'
+                            : 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                      }`}
+                    >
+                      {getVendorBadgeLabel(vendor)}
+                    </span>
+                  </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-              <div className="bg-white rounded border border-emerald-100 p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Phone</span>
-                <span>{vendorLookupSummary.phone}</span>
-              </div>
-              <div className="bg-white rounded border border-emerald-100 p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Email</span>
-                <span className="break-all">{vendorLookupSummary.email}</span>
-              </div>
-              <div className="bg-white rounded border border-emerald-100 p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Chamber No.</span>
-                <span>{vendorLookupSummary.chamberNo}</span>
-              </div>
-            </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trade License No.</span>
+                      <span className="font-mono font-semibold">{vendor.tradeLicenseNo}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Expiry Date</span>
+                      <span className="font-semibold">{vendor.expDate}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5 sm:col-span-2">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Business Activity</span>
+                      <span>{vendor.businessActivity}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5 sm:col-span-2">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Address</span>
+                      <span>{vendor.address}</span>
+                    </div>
+                  </div>
 
-            <div className="text-[10px] text-emerald-800 font-medium">
-              Route: {vendorLookupSummary.routeLabel}
-              <span className="mx-1">•</span>
-              Source: TBMS lookup
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Phone</span>
+                      <span>{vendor.phone}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Email</span>
+                      <span className="break-all">{vendor.email}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded border border-emerald-100 p-2.5">
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Chamber No.</span>
+                      <span>{vendor.chamberNo}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-emerald-800 font-medium">
+                    Route: {vendor.routeLabel}
+                    <span className="mx-1">•</span>
+                    Source: TBMS lookup
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
