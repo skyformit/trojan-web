@@ -702,6 +702,7 @@ export default function App() {
           company_name_hint: requestCompanyName,
           extraction: agentExtractionForDecision,
           reconciliation: agentReconciliationForDecision,
+          validation: finalValidation,
           tbms_record: {
             vendor_name: requestCompanyName,
             license_no: requestLicenseNumber,
