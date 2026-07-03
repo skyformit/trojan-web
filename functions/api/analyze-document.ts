@@ -227,6 +227,12 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       extractedData as Record<string, unknown>
     );
     const mergedGptReview = parsedResponse.gpt_review || fallbackReview;
+    const mergedLlmExtraction =
+      (parsedResponse as any).llm_extraction ||
+      (parsedResponse as any).llmExtraction ||
+      (parsedResponse as any).extraction?.llm_extraction ||
+      (parsedResponse as any).extraction?.llmExtraction ||
+      null;
 
     return Response.json({
       status: "success",
@@ -236,6 +242,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
       results: parsedResponse.results || {},
+      llm_extraction: mergedLlmExtraction,
+      llmExtraction: mergedLlmExtraction,
       documentAcceptance: parsedResponse.document_acceptance || null,
       extractedData: {
         ...extractedData,
@@ -248,6 +256,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       gptReview: mergedGptReview,
       rawResponse: {
         ...parsedResponse,
+        llm_extraction: mergedLlmExtraction,
+        llmExtraction: mergedLlmExtraction,
         gpt_review: mergedGptReview,
       },
       requestContext: {

@@ -48,6 +48,18 @@ function getResultValue(results: Record<string, { value?: string }>, keys: strin
   return '';
 }
 
+function parseMaybeJson(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return value ?? null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
 function getAgentDecisionDocumentType(documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
   if (documentType === 'trade_license') return 'trade';
   if (documentType === 'vat_certificate') return 'vat';
@@ -300,6 +312,18 @@ function buildAgent2ExtractionPayload(
     rawResponse.plausibility_score ??
     gptReview?.plausibility_score ??
     null;
+  const normalizedDocumentContext = parseMaybeJson(
+    (rawExtraction as Record<string, unknown>).document_context ||
+    (rawResponse as Record<string, unknown>).document_context ||
+    extractionResponse.requestContext?.document_context ||
+    null
+  );
+  const normalizedContextHint = parseMaybeJson(
+    (rawExtraction as Record<string, unknown>).context_hint ||
+    (rawResponse as Record<string, unknown>).context_hint ||
+    extractionResponse.requestContext?.context_hint ||
+    null
+  );
 
   return {
     ...rawExtraction,
@@ -314,6 +338,8 @@ function buildAgent2ExtractionPayload(
     gpt_review: gptReview,
     gptReview: gptReview,
     score,
+    document_context: normalizedDocumentContext,
+    context_hint: normalizedContextHint,
   };
 }
 
@@ -330,11 +356,12 @@ function buildReconciliationPayload(
   extractionResponse: AgentExtractionResponse
 ) {
   const agentDocumentType = getAgentDecisionDocumentType(documentType);
+  const parsedContextHint = parseMaybeJson(uploadContext?.contextHint);
   const requestedCompanyName =
     uploadContext?.companyName?.trim() ||
     registrationState.companyName?.trim() ||
     String(extractionResponse.requestContext?.company_name || '').trim() ||
-    String((uploadContext?.contextHint as Record<string, any> | undefined)?.entities?.company_name || '').trim();
+    String((parsedContextHint as Record<string, any> | undefined)?.entities?.company_name || '').trim();
 
   const requestedLicenseNumber =
     uploadContext?.tradeLicenseNumber?.trim() ||
@@ -804,9 +831,6 @@ export default function App() {
           : 'Please upload a clearer or corrected document so we can continue.';
 
       const finalLogEntries = [
-        `Agent 2: Document extraction completed.`,
-        `Agent 3: TBMS reconciliation ${reconciliationDecision || 'completed'}.`,
-        ...(approvalReviewData ? [`Agent 4: Final approval review ${finalDecision}.`] : []),
         `Decision: ${decisionLabel}`,
         finalValidation?.document_type ? `Document Type: ${finalValidation.document_type}` : 'Document Type: N/A',
         finalValidation?.score !== undefined ? `Review Score: ${finalValidation.score}` : 'Review Score: N/A',
@@ -840,9 +864,6 @@ export default function App() {
           },
           validationLogs: [
             ...doc.validationLogs,
-            `Agent 2 extraction completed in ${analyzeData.processingTime || (typeof analyzeData.processingTimeMs === 'number' ? `${(analyzeData.processingTimeMs / 1000).toFixed(2)}s` : 'N/A')}.`,
-            `Agent 3 reconciliation decision: ${reconciliationDecision || 'N/A'}.`,
-            ...(approvalReviewData ? [`Agent 4 final decision: ${finalDecision}.`] : []),
             `OCR company: "${getDisplayOcrName(extracted)}"`,
             `Trade name: "${getDisplayTradeName(extracted)}"`,
             `Result status: ${decisionLabel}`,
@@ -882,9 +903,6 @@ export default function App() {
           ? `[[DOCUMENT_ACCEPTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Agent 2: Extraction completed.
-Agent 3: TBMS reconciliation completed.
-${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
 Acceptance Status: Approved
 Next Step: ${
               type === 'trade_license'
@@ -897,26 +915,17 @@ Next Step: ${
             ? `[[DOCUMENT_REVIEW]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Agent 2: Extraction completed.
-Agent 3: TBMS reconciliation completed.
-${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
 Review Note: ${friendlyReason}
 Next Step: We will continue once the review is complete.`
-            : uiDecision === 'expired'
-              ? `[[DOCUMENT_EXPIRED]]
+          : uiDecision === 'expired'
+            ? `[[DOCUMENT_EXPIRED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Agent 2: Extraction completed.
-Agent 3: TBMS reconciliation completed.
-${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
 Expiry Note: ${friendlyReason}
 Next Step: ${friendlyNextStep}`
           : `[[DOCUMENT_REJECTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
 OCR Scanned Name: "${getDisplayOcrName(extracted)}"
-Agent 2: Extraction completed.
-Agent 3: TBMS reconciliation completed.
-${approvalReviewData ? 'Agent 4: Final approval review completed.' : 'Agent 4: Not required.'}
 Rejection Summary: ${friendlyReason}
 Next Step: ${friendlyNextStep}`
       );

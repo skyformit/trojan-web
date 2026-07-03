@@ -547,6 +547,12 @@ app.post("/api/analyze-document", multipartUpload.single("file"), async (req, re
       parsedResponse
     );
     const tradeName = getResultValue(parsedResponse.results, ["TradeName"]);
+    const mergedLlmExtraction =
+      (parsedResponse as any).llm_extraction ||
+      (parsedResponse as any).llmExtraction ||
+      (parsedResponse as any).extraction?.llm_extraction ||
+      (parsedResponse as any).extraction?.llmExtraction ||
+      null;
 
     return res.json({
       status: "success",
@@ -556,13 +562,19 @@ app.post("/api/analyze-document", multipartUpload.single("file"), async (req, re
       processingTimeMs,
       processingTime: `${(processingTimeMs / 1000).toFixed(2)}s`,
       results: parsedResponse.results || {},
+      llm_extraction: mergedLlmExtraction,
+      llmExtraction: mergedLlmExtraction,
       documentAcceptance: (parsedResponse as any).document_acceptance || null,
       extractedData: {
         ...extractedData,
         tradeName: extractedData.tradeName || tradeName,
         companyName: extractedData.companyName || extractedData.tradeName || tradeName,
       },
-      rawResponse: parsedResponse,
+      rawResponse: {
+        ...parsedResponse,
+        llm_extraction: mergedLlmExtraction,
+        llmExtraction: mergedLlmExtraction,
+      },
       requestContext: {
         company_name: companyName || null,
         conversation_id: conversationId || null,
