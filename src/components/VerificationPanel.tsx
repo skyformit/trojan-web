@@ -15,6 +15,19 @@ export default function VerificationPanel({
 }: VerificationPanelProps) {
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
+  const productOptions = [
+    'Construction Equipment',
+    'Spare Parts',
+    'Electrical & Lighting',
+    'Oilfield & Gas Equipment',
+    'Safety & PPE',
+    'Hardware & Fasteners',
+    'Plumbing Materials',
+    'HVAC & Ducting',
+    'Industrial Tools',
+    'Chemicals & Consumables',
+    'General Trading'
+  ];
 
   const formatMissingItemLabel = (field: string) => {
     const normalized = field.trim().toLowerCase();
@@ -346,6 +359,8 @@ export default function VerificationPanel({
                     onClick={() => {
                       setRegistrationState(prev => ({
                         ...prev,
+                        surveyDocumentType: 'trade',
+                        surveyProduct: 'Construction Equipment',
                         yearsInBusiness: '5 to 10',
                         totalStaff: '50 to 100',
                         totalLabors: '100 Plus',
@@ -365,6 +380,36 @@ export default function VerificationPanel({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label htmlFor="survey-document-type" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Document type</label>
+                    <select
+                      id="survey-document-type"
+                      value={registrationState.surveyDocumentType || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, surveyDocumentType: e.target.value as 'trade' | 'vat' | 'bank' | '' }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      <option value="trade">Trade</option>
+                      <option value="vat">VAT</option>
+                      <option value="bank">Bank</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="survey-product" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Products</label>
+                    <select
+                      id="survey-product"
+                      value={registrationState.surveyProduct || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, surveyProduct: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">Select option...</option>
+                      {productOptions.map((product) => (
+                        <option key={product} value={product}>{product}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div>
                     <label htmlFor="survey-years-in-business" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Years in business</label>
                     <select
@@ -518,6 +563,8 @@ export default function VerificationPanel({
 
               {/* Complete & Submit Button */}
               {!(
+                registrationState.surveyDocumentType &&
+                registrationState.surveyProduct &&
                 registrationState.yearsInBusiness &&
                 registrationState.totalStaff &&
                 registrationState.totalLabors &&
@@ -538,6 +585,8 @@ export default function VerificationPanel({
                 onClick={onSubmitRegistration}
                 disabled={
                   !(
+                    registrationState.surveyDocumentType &&
+                    registrationState.surveyProduct &&
                     registrationState.yearsInBusiness &&
                     registrationState.totalStaff &&
                     registrationState.totalLabors &&

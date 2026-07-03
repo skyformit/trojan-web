@@ -93,6 +93,8 @@ export interface SupplierRegistrationState {
   biggestProjectValue?: string;
   annualTurnover?: string;
   factoryAssetValue?: string;
+  surveyDocumentType?: 'trade' | 'vat' | 'bank' | '';
+  surveyProduct?: string;
 }
 
 export interface GovernmentRegistryRecord {
