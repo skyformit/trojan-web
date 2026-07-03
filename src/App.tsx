@@ -476,7 +476,7 @@ const initialRegistrationState: SupplierRegistrationState = {
   biggestProjectValue: '',
   annualTurnover: '',
   factoryAssetValue: '',
-  surveyDocumentType: '',
+  vendorType: '',
   surveyProduct: ''
 };
 
@@ -1215,7 +1215,7 @@ Next Step: ${friendlyNextStep}`
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Corporate Bank Account:</strong> Authoritative Verification Complete <span className="text-indigo-600 ml-1 font-bold">(AUTHORIZED)</span></p>
               {registrationState.yearsInBusiness && (
                 <div className="border-t border-slate-200 pt-3 mt-3 font-sans text-slate-700 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Document Type</span><strong className="text-slate-800 text-xs">{registrationState.surveyDocumentType || 'N/A'}</strong></div>
+                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Vendor Type</span><strong className="text-slate-800 text-xs">{registrationState.vendorType || 'N/A'}</strong></div>
                   <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Selected Product</span><strong className="text-slate-800 text-xs">{registrationState.surveyProduct || 'N/A'}</strong></div>
                   <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Years in Business</span><strong className="text-slate-800 text-xs">{registrationState.yearsInBusiness}</strong></div>
                   <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Total Staff</span><strong className="text-slate-800 text-xs">{registrationState.totalStaff}</strong></div>

@@ -359,7 +359,7 @@ export default function VerificationPanel({
                     onClick={() => {
                       setRegistrationState(prev => ({
                         ...prev,
-                        surveyDocumentType: 'trade',
+                        vendorType: 'Supplier',
                         surveyProduct: 'Construction Equipment',
                         yearsInBusiness: '5 to 10',
                         totalStaff: '50 to 100',
@@ -381,17 +381,17 @@ export default function VerificationPanel({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
-                    <label htmlFor="survey-document-type" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Document type</label>
+                    <label htmlFor="survey-vendor-type" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Vendor type</label>
                     <select
-                      id="survey-document-type"
-                      value={registrationState.surveyDocumentType || ''}
-                      onChange={(e) => setRegistrationState(prev => ({ ...prev, surveyDocumentType: e.target.value as 'trade' | 'vat' | 'bank' | '' }))}
+                      id="survey-vendor-type"
+                      value={registrationState.vendorType || ''}
+                      onChange={(e) => setRegistrationState(prev => ({ ...prev, vendorType: e.target.value as 'Supplier' | 'Others' | 'Government services' | '' }))}
                       className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
                       <option value="">Select option...</option>
-                      <option value="trade">Trade</option>
-                      <option value="vat">VAT</option>
-                      <option value="bank">Bank</option>
+                      <option value="Supplier">Supplier</option>
+                      <option value="Others">Others</option>
+                      <option value="Government services">Government services</option>
                     </select>
                   </div>
 
@@ -563,7 +563,7 @@ export default function VerificationPanel({
 
               {/* Complete & Submit Button */}
               {!(
-                registrationState.surveyDocumentType &&
+                registrationState.vendorType &&
                 registrationState.surveyProduct &&
                 registrationState.yearsInBusiness &&
                 registrationState.totalStaff &&
@@ -585,7 +585,7 @@ export default function VerificationPanel({
                 onClick={onSubmitRegistration}
                 disabled={
                   !(
-                    registrationState.surveyDocumentType &&
+                    registrationState.vendorType &&
                     registrationState.surveyProduct &&
                     registrationState.yearsInBusiness &&
                     registrationState.totalStaff &&
