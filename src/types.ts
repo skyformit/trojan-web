@@ -65,6 +65,9 @@ export interface SupplierRegistrationState {
   contactName: string;
   contactEmail: string;
   phoneNumber: string;
+  backupContactName?: string;
+  backupContactEmail?: string;
+  backupContactPhone?: string;
   companyAddress?: string;
   country: string;
   workflowStatus?: 'completed' | 'expired' | 'renewal_due';

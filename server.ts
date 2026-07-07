@@ -25,6 +25,7 @@ const APPROVAL_REVIEW_ENDPOINT =
   process.env.APPROVAL_REVIEW_ENDPOINT ||
   process.env.HIDL_APPROVAL ||
   "";
+const TBMS_ORCHESTRATOR_ENDPOINT = process.env.TBMS_ORCHESTRATOR_ENDPOINT;
 
 type DocumentType = "trade_license" | "vat_certificate" | "bank_document";
 
@@ -382,24 +383,38 @@ app.post("/api/invoke-general-bot", async (req, res) => {
       context: req.body?.context,
     };
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), 15000);
-    let externalRes: Response;
+    const fetchGeneralBot = async () => {
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => controller.abort(), 15000);
+      try {
+        return await fetch(GENERAL_BOT_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
+    };
 
+    let externalRes: Response;
     try {
-      externalRes = await fetch(GENERAL_BOT_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      externalRes = await fetchGeneralBot();
     } catch (fetchError: any) {
-      clearTimeout(timeoutHandle);
-      throw fetchError;
-    } finally {
-      clearTimeout(timeoutHandle);
+      const isAbortError =
+        fetchError?.name === "AbortError" ||
+        /aborted|This operation was aborted/i.test(fetchError?.message || "");
+
+      if (!isAbortError) {
+        throw fetchError;
+      }
+
+      console.warn("General bot request aborted, retrying once...");
+
+      externalRes = await fetchGeneralBot();
     }
 
     const rawResponse = await externalRes.text();
@@ -664,6 +679,40 @@ app.post("/api/agent-approval-review", async (req, res) => {
       ok: false,
       status: "error",
       text: error.message || "Internal server error during approval review",
+    });
+  }
+});
+
+app.post("/api/agent-tbms-orchestrator", async (req, res) => {
+  try {
+    const externalRes = await fetch(TBMS_ORCHESTRATOR_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+
+    const rawResponse = await externalRes.text();
+    let parsedResponse: any;
+
+    try {
+      parsedResponse = JSON.parse(rawResponse);
+    } catch {
+      parsedResponse = {
+        ok: externalRes.ok,
+        status: externalRes.ok ? "completed" : "error",
+        text: rawResponse || "TBMS orchestrator returned a non-JSON response.",
+      };
+    }
+
+    return res.status(externalRes.status).json(parsedResponse);
+  } catch (error: any) {
+    console.error("Error in /api/agent-tbms-orchestrator:", error);
+    return res.status(500).json({
+      ok: false,
+      status: "error",
+      text: error.message || "Internal server error during TBMS orchestrator submission",
     });
   }
 });

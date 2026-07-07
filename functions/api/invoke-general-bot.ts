@@ -167,45 +167,53 @@ export async function onRequestPost({ request, env }: { request: Request; env: P
       );
     }
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const externalRes = await fetch(GENERAL_BOT_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      const rawResponse = await externalRes.text();
-      let parsedResponse: GeneralBotResponse;
+    const fetchGeneralBot = async () => {
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => controller.abort(), 15000);
 
       try {
-        parsedResponse = JSON.parse(rawResponse) as GeneralBotResponse;
-      } catch {
-        parsedResponse = {
-          ok: externalRes.ok,
-          status: externalRes.ok ? "completed" : "error",
-          text: rawResponse || "General bot returned a non-JSON response.",
-        };
+        return await fetch(GENERAL_BOT_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
+    };
+
+    let externalRes: Response;
+    try {
+      externalRes = await fetchGeneralBot();
+    } catch (error: any) {
+      const isAbortError =
+        error?.name === "AbortError" ||
+        /aborted|This operation was aborted/i.test(error?.message || "");
+
+      if (!isAbortError) {
+        throw error;
       }
 
-      return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);
-    } catch (error: any) {
-      return json(
-        {
-          ok: false,
-          status: "error",
-          text: error?.message || "Internal server error during general bot routing",
-        },
-        500
-      );
-    } finally {
-      clearTimeout(timeoutHandle);
+      externalRes = await fetchGeneralBot();
     }
+
+    const rawResponse = await externalRes.text();
+    let parsedResponse: GeneralBotResponse;
+
+    try {
+      parsedResponse = JSON.parse(rawResponse) as GeneralBotResponse;
+    } catch {
+      parsedResponse = {
+        ok: externalRes.ok,
+        status: externalRes.ok ? "completed" : "error",
+        text: rawResponse || "General bot returned a non-JSON response.",
+      };
+    }
+
+    return json(normalizeGeneralBotResponse(parsedResponse), externalRes.status);
   } catch (error: any) {
     return json(
       {

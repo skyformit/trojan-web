@@ -60,6 +60,125 @@ function parseMaybeJson(value: unknown) {
   }
 }
 
+function formatIsoDateFromText(value?: string | null) {
+  const input = String(value || '').trim();
+  if (!input) return '';
+
+  const isoLike = input.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoLike) {
+    return `${isoLike[1]}-${isoLike[2]}-${isoLike[3]}T00:00:00`;
+  }
+
+  const dmy = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) {
+    const [, dd, mm, yyyy] = dmy;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T00:00:00`;
+  }
+
+  const parsed = new Date(input);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 19);
+  }
+
+  return input;
+}
+
+function keepStrictMidnightIsoDate(value?: string | null) {
+  const input = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}T00:00:00$/.test(input) ? input : undefined;
+}
+
+function normalizeComparisonValue(value?: string | null) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isValidEmail(value?: string | null) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function summarizeOrchestratorFailure(response: Record<string, any> | null) {
+  const nestedStepStatus = String(
+    response?.steps?.[0]?.result?.data?.data?.status ||
+    response?.steps?.[0]?.result?.data?.status ||
+    response?.steps?.[0]?.result?.status ||
+    ''
+  ).trim();
+
+  const rawMessage = String(
+    nestedStepStatus ||
+    response?.error?.message ||
+    response?.text ||
+    response?.failed_step ||
+    'The orchestrator could not complete the submission.'
+  ).trim();
+
+  const normalized = [rawMessage, nestedStepStatus, response?.error?.message, response?.failed_step]
+    .filter(Boolean)
+    .map(value => String(value).toLowerCase())
+    .join(' | ');
+
+  if (normalized.includes('loginid already exists') || normalized.includes('login id already exists')) {
+    return {
+      title: 'Submission blocked: username already exists',
+      message: 'The orchestrator could not create the vendor because the username already exists.',
+      suggestion: 'Please change the username, vendor name, or email address, then submit again.',
+      failedStep: String(response?.failed_step || 'basic_info_insert'),
+    };
+  }
+
+  if (normalized.includes('already exists')) {
+    return {
+      title: 'Submission blocked: duplicate record found',
+      message: 'The orchestrator found a record that already exists.',
+      suggestion: 'Please update the vendor name, username, or email address and retry.',
+      failedStep: String(response?.failed_step || 'basic_info_insert'),
+    };
+  }
+
+  if (normalized.includes('invalid') || normalized.includes('bad request')) {
+    return {
+      title: 'Submission blocked: invalid data',
+      message: 'The orchestrator rejected the payload because one or more fields were invalid.',
+      suggestion: 'Please review the vendor name, username, email address, and contact details, then try again.',
+      failedStep: String(response?.failed_step || 'unknown'),
+    };
+  }
+
+  return {
+    title: 'Submission failed',
+    message: rawMessage || 'The orchestrator could not complete the submission.',
+    suggestion: 'Please review the vendor details and try submitting again.',
+    failedStep: String(response?.failed_step || 'unknown'),
+  };
+}
+
+function splitFullName(fullName?: string) {
+  const trimmed = String(fullName || '').trim();
+  if (!trimmed) {
+    return { title: 'Mr', firstName: '', lastName: '' };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return { title: 'Mr', firstName: parts[0], lastName: '' };
+  }
+
+  return {
+    title: 'Mr',
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function mapVendorTypeToId(vendorType?: SupplierRegistrationState['vendorType']) {
+  if (vendorType === 'Others') return 2;
+  if (vendorType === 'Government services') return 3;
+  return 1;
+}
+
 function getAgentDecisionDocumentType(documentType: 'trade_license' | 'vat_certificate' | 'bank_document') {
   if (documentType === 'trade_license') return 'trade';
   if (documentType === 'vat_certificate') return 'vat';
@@ -451,6 +570,7 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
       bankName: normalized.bankName || getResultValue(rawResults, ['BankName', 'Bank']),
       iban: normalized.iban || getResultValue(rawResults, ['IBAN']),
       accountName: normalized.accountName || getResultValue(rawResults, ['AccountName']),
+      bankHolderName: normalized.bankHolderName || getResultValue(rawResults, ['AccountName', 'TradeName', 'CompanyName', 'LegalNameEnglish', 'BusinessName']),
     };
   }
 
@@ -468,6 +588,220 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
     manager: normalized.manager || getResultValue(rawResults, ['Manager', 'AuthorizedSignatory']),
     officialEmail: getResultValue(rawResults, ['OfficialEmail']),
     officialMobile: getResultValue(rawResults, ['OfficialMobile']),
+    issueAuthority: normalized.issueAuthority || getResultValue(rawResults, ['IssueAuthority', 'IssuingAuthority', 'Authority']),
+    address: normalized.address || getResultValue(rawResults, ['Address', 'CompanyAddress']),
+    chamberNo: normalized.chamberNo || getResultValue(rawResults, ['ChamberNo', 'ChamberNumber']),
+    website: normalized.website || getResultValue(rawResults, ['Website']),
+    phone: normalized.phone || getResultValue(rawResults, ['Phone', 'Telephone', 'Tel']),
+    email: normalized.email || getResultValue(rawResults, ['Email', 'OfficialEmail']),
+  };
+}
+
+function buildOrchestratorSubmissionPayload(registrationState: SupplierRegistrationState) {
+  const tradeDoc = registrationState.documents.trade_license;
+  const vatDoc = registrationState.documents.vat_certificate;
+  const bankDoc = registrationState.documents.bank_document;
+  const bankExtraction = bankDoc.extractedData || {};
+  const tradeData = tradeDoc.extractedData || {};
+  const vatData = vatDoc.extractedData || {};
+  const bankData = bankDoc.extractedData || {};
+  const companyName =
+    registrationState.companyName ||
+    tradeData.companyName ||
+    tradeData.tradeName ||
+    vatData.companyName ||
+    vatData.tradeName ||
+    bankData.companyName ||
+    bankData.tradeName ||
+    '';
+  const tradeLicenseNumber =
+    registrationState.tradeLicenseNumber ||
+    tradeData.licenseNumber ||
+    tradeData.tradeLicNo ||
+    '';
+  const bankName = bankData.bankName || bankData.accountName || bankExtraction.bankName || bankExtraction.accountName || 'ABC Bank';
+  const bankAccountNumber = bankData.bankAccountNumber || bankData.iban || bankExtraction.bankAccountNumber || bankExtraction.iban || '';
+  const primaryContactName = registrationState.contactName || companyName || tradeData.companyName || tradeData.tradeName || '';
+  const primaryContactParts = splitFullName(primaryContactName);
+  const normalizedPhone = String(registrationState.phoneNumber || tradeData.phone || tradeData.telephoneNo || '').trim();
+  const normalizedAddress =
+    registrationState.companyAddress ||
+    tradeData.address ||
+    vatData.address ||
+    bankData.address ||
+    'Abu Dhabi, UAE';
+  const normalizedFax = String(tradeData.fax || bankData.fax || '').trim();
+  const normalizedEmail =
+    registrationState.contactEmail ||
+    tradeData.email ||
+    tradeData.officialEmail ||
+    vatData.email ||
+    bankData.email ||
+    '';
+  const alternateEmail =
+    tradeData.alternateEmail ||
+    vatData.alternateEmail ||
+    bankData.alternateEmail ||
+    '';
+  const website = tradeData.website || vatData.website || bankData.website || '';
+  const contactPhone = normalizedPhone || tradeData.phone || tradeData.telephoneNo || '';
+  const ownerName = registrationState.contactName || primaryContactName || companyName || '';
+  const ownerEmail = registrationState.contactEmail || normalizedEmail || '';
+  const ownerMobile = normalizedPhone || contactPhone || '';
+  const backupContactName = String(registrationState.backupContactName || '').trim();
+  const backupContactEmail = String(registrationState.backupContactEmail || '').trim();
+  const backupContactPhone = String(registrationState.backupContactPhone || '').trim();
+  const conversationId =
+    tradeDoc.agent2Response &&
+    typeof tradeDoc.agent2Response === 'object' &&
+    tradeDoc.agent2Response !== null &&
+    'requestContext' in tradeDoc.agent2Response
+      ? String((tradeDoc.agent2Response as Record<string, any>).requestContext?.conversation_id || '')
+      : '';
+  const expiryDate =
+    keepStrictMidnightIsoDate(tradeDoc.documentAcceptance?.expiry_date) ||
+    keepStrictMidnightIsoDate(tradeData.expiryDate) ||
+    keepStrictMidnightIsoDate((tradeData as Record<string, string>).tradeLicExpiry) ||
+    undefined;
+  const passportExpiry = keepStrictMidnightIsoDate((registrationState as Record<string, any>).passportExpiry);
+  const eidExpiry = keepStrictMidnightIsoDate((registrationState as Record<string, any>).eidExpiry);
+
+  const contacts = [
+    {
+      title: primaryContactParts.title,
+      firstName: primaryContactParts.firstName,
+      lastName: primaryContactParts.lastName,
+      position: tradeData.manager || 'Manager',
+      phone: contactPhone,
+      email: normalizedEmail,
+      userName: registrationState.contactName || primaryContactParts.firstName || companyName,
+    },
+  ];
+
+  if (backupContactName || backupContactEmail || backupContactPhone) {
+    const backupParts = splitFullName(backupContactName);
+    contacts.push({
+      title: backupParts.title,
+      firstName: backupParts.firstName,
+      lastName: backupParts.lastName,
+      position: 'Secondary Contact',
+      phone: backupContactPhone || contactPhone,
+      email: backupContactEmail,
+      userName: backupContactName || backupParts.firstName || companyName,
+    });
+  }
+
+  return {
+    vendID: 0,
+    userName: registrationState.contactName || primaryContactParts.firstName || companyName,
+    vendorTypeID: mapVendorTypeToId(registrationState.vendorType),
+    vendorType: registrationState.vendorType || 'Supplier',
+    vendName: companyName,
+    address: normalizedAddress,
+    countryID: 1,
+    city: 1,
+    region: tradeData.region || 'Mussafah',
+    poBoxNo: tradeData.poBoxNo || '',
+    tel: normalizedPhone,
+    fax: normalizedFax,
+    email: normalizedEmail,
+    alternateEmail,
+    website,
+    estIn: tradeData.estIn || 2015,
+    noOfEmp: tradeData.noofEmp || tradeData.noOfEmp || 50,
+    listOfEmp: tradeData.listOfEmp || tradeDoc.fileName || 'employee-list.pdf',
+    orgSize: 2,
+    compProfile: tradeData.compProfilePath || 'company-profile.pdf',
+    turnOver: tradeData.turnOver || 'turnover.pdf',
+    locMap: tradeData.locMap || 'location-map.pdf',
+    listOfplantsandEquipments: tradeData.listofPlantEquip || 'plants-equipment.pdf',
+    alternateEmail1: tradeData.alternateEmail1 || registrationState.contactEmail || '',
+    trjCompanyRef: tradeData.trjCompanyRef || 'TRJ-001',
+    zakat: tradeData.zakat || 'zakat.pdf',
+    saudization: tradeData.saudization || 'saudization.pdf',
+    chamberNo: tradeData.chamberNo || '',
+    tradeLicenseNo: tradeLicenseNumber,
+    ...(expiryDate ? { expDate: expiryDate } : {}),
+    issueAuthority: tradeData.issueAuthority || 'Dubai Economy Department',
+    tradeActivities: tradeData.licensedActivities || tradeData.activity || '',
+    tradeLicPath: tradeDoc.fileName || 'trade-license.pdf',
+    chamberOfCommercePath: tradeData.chamberOfCommercePath || 'chamber-certificate.pdf',
+    insuranceCopy: tradeData.insuranceCopy || 'insurance.pdf',
+    compLaborCardPath: tradeData.compLaborCardPath || 'labor-card.pdf',
+    licenseAuthorityID: 1,
+    vatRegNo: registrationState.vatNumber || vatData.vatNumber || vatData.taxRegistrationNumber || '',
+    vatEnglishName: vatData.companyName || companyName,
+    vatArabicName: vatData.vatArabicName || '',
+    vatDocPath: vatDoc.fileName || 'vat-certificate.pdf',
+    vatRegistered: 1,
+    paymentType: 1,
+    chqBenName: companyName,
+    chqBenBankName: bankName,
+    tlBenAccName: companyName,
+    tlBenBankName: bankName,
+    tlBenAccNo: bankAccountNumber,
+    tlibanNo: bankData.iban || '',
+    tlSwiftCode: bankData.swiftCode || 'ABCDAEAD',
+    tiBenAccName: companyName,
+    tiBenBankName: bankName,
+    tiBenAccNo: bankAccountNumber,
+    tiSwiftCode: bankData.swiftCode || 'ABCDAEAD',
+    tiCorrBankName: bankData.correspondentBankName || 'Correspondent Bank',
+    tiCorrAccNo: bankData.correspondentAccountNumber || 'CORR12345',
+    tiCorrSwiftCode: bankData.correspondentSwiftCode || 'CORRAEAD',
+    tiIntBankName: bankData.intermediateBankName || 'Intermediate Bank',
+    tiIntBankAccNo: bankData.intermediateBankAccountNumber || 'INT12345',
+    tiIntBankSwiftCode: bankData.intermediateBankSwiftCode || 'INTBAEAD',
+    bankID: 5,
+    bankProof: bankDoc.fileName || 'bank-proof.pdf',
+    inchCompID: 1,
+    title: primaryContactParts.title,
+    firstName: primaryContactParts.firstName,
+    lastName: primaryContactParts.lastName,
+    position: tradeData.manager || 'Manager',
+    phone: contactPhone,
+    verifiQuestion: 'What is your company code?',
+    verifiAnswer: 'ABC123',
+    telephoneNo: normalizedPhone,
+    isDeliveryIncharge: true,
+    ownerName,
+    ownerEmail,
+    ownerMobile,
+    backupContactName: backupContactName || undefined,
+    backupContactEmail: backupContactEmail || undefined,
+    backupContactPhone: backupContactPhone || undefined,
+    eidNo: '',
+    passportNo: '',
+    dob: '',
+    nationality: 1,
+    sharePercentage: 50,
+    ownershipType: 1,
+    ...(eidExpiry ? { eidExpiry } : {}),
+    ...(passportExpiry ? { passportExpiry } : {}),
+    eidAttachment: '',
+    passportAttachment: '',
+    tradeLicNo: tradeLicenseNumber,
+    ...(expiryDate ? { tradeLicExpiry: expiryDate } : {}),
+    tradeLicAttachment: tradeDoc.fileName || 'trade-license.pdf',
+    ownerID: 31,
+    detailID: 0,
+    MajorGroupID: 3,
+    MinorGroupID1: 1,
+    MinorGroupID2: 1,
+    MinorGroupID3: 1,
+    Brand: registrationState.surveyProduct || '',
+    surveyProduct: registrationState.surveyProduct || '',
+    ContactID: -1,
+    VendID: '233',
+    ApprovalTypeID: '1',
+    Action: 'Apprpve',
+    Comments: 'Approve',
+    nextStatusID: 6,
+    contacts,
+    submit_after_success: true,
+    approve_after_submit: true,
+    document_type: 'trade',
+    conversation_id: conversationId || 'conv-52555-live-test',
   };
 }
 
@@ -476,6 +810,9 @@ const initialRegistrationState: SupplierRegistrationState = {
   contactName: '',
   contactEmail: '',
   phoneNumber: '',
+  backupContactName: '',
+  backupContactEmail: '',
+  backupContactPhone: '',
   country: '',
   workflowStatus: undefined,
   workflowRoute: '',
@@ -513,6 +850,17 @@ export default function App() {
   const [registryRecords, setRegistryRecords] = useState<any[]>([]);
   const [showRegistryDrawer, setShowRegistryDrawer] = useState(false);
   const [submissionComplete, setSubmissionComplete] = useState(false);
+  const [isSubmittingRegistration, setIsSubmittingRegistration] = useState(false);
+  const [orchestratorResponse, setOrchestratorResponse] = useState<Record<string, any> | null>(null);
+  const [orchestratorFailure, setOrchestratorFailure] = useState<{
+    title: string;
+    message: string;
+    suggestion: string;
+    failedStep: string;
+  } | null>(null);
+  const [showBackupContactPrompt, setShowBackupContactPrompt] = useState(false);
+  const [backupContactAttempted, setBackupContactAttempted] = useState(false);
+  const [backupContactErrors, setBackupContactErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
 
   // Fetch sandbox records from server to display in helper drawer
   const fetchRegistryRecords = async () => {
@@ -965,14 +1313,137 @@ Next Step: ${friendlyNextStep}`
     }
   };
 
-  const handleSubmitRegistration = () => {
-    setSubmissionComplete(true);
+  const getBackupContactValidation = () => {
+    const primaryName = normalizeComparisonValue(registrationState.contactName);
+    const primaryEmail = normalizeComparisonValue(registrationState.contactEmail);
+    const primaryPhone = normalizeComparisonValue(registrationState.phoneNumber);
+    const backupName = normalizeComparisonValue(registrationState.backupContactName);
+    const backupEmail = normalizeComparisonValue(registrationState.backupContactEmail);
+    const backupPhone = normalizeComparisonValue(registrationState.backupContactPhone);
+
+    const errors: { name?: string; email?: string; phone?: string } = {};
+
+    if (!registrationState.backupContactName?.trim()) {
+      errors.name = 'Please provide one more contact name.';
+    } else if (primaryName && backupName === primaryName) {
+      errors.name = 'The backup contact name must be different from the primary contact name.';
+    }
+
+    if (!registrationState.backupContactEmail?.trim()) {
+      errors.email = 'Please provide one more contact email address.';
+    } else if (!isValidEmail(registrationState.backupContactEmail)) {
+      errors.email = 'Please enter a valid email address.';
+    } else if (primaryEmail && backupEmail === primaryEmail) {
+      errors.email = 'The backup contact email must be different from the primary email.';
+    }
+
+    if (!registrationState.backupContactPhone?.trim()) {
+      errors.phone = 'Please provide one more contact mobile number.';
+    } else if (primaryPhone && backupPhone === primaryPhone) {
+      errors.phone = 'The backup contact mobile number must be different from the primary number.';
+    }
+
+    return errors;
+  };
+
+  const handleSubmitRegistration = async () => {
+    if (isSubmittingRegistration) {
+      return;
+    }
+
+    const backupErrors = getBackupContactValidation();
+    const hasBackupContact =
+      Boolean(registrationState.backupContactName?.trim()) ||
+      Boolean(registrationState.backupContactEmail?.trim()) ||
+      Boolean(registrationState.backupContactPhone?.trim());
+
+    if (!hasBackupContact || Object.keys(backupErrors).length > 0) {
+      setBackupContactAttempted(true);
+      setBackupContactErrors(backupErrors);
+      setShowBackupContactPrompt(true);
+      return;
+    }
+
+    setShowBackupContactPrompt(false);
+    setBackupContactAttempted(false);
+    setBackupContactErrors({});
+    setIsSubmittingRegistration(true);
+    setOrchestratorFailure(null);
+
+    try {
+      const payload = buildOrchestratorSubmissionPayload(registrationState);
+      const response = await fetch('/api/agent-tbms-orchestrator', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      const orchestratorFailed =
+        !response.ok ||
+        data?.ok === false ||
+        data?.status === 'error' ||
+        data?.status === 'failed' ||
+        data?.workflow_status === 'failed' ||
+        data?.final_status?.submitted === false;
+
+      if (orchestratorFailed) {
+        const failureSummary = summarizeOrchestratorFailure(data);
+        setOrchestratorResponse(data);
+        setOrchestratorFailure(failureSummary);
+        setChatHistory(prev => [
+          ...prev,
+          {
+            id: 'orchestrator-failed-' + Date.now(),
+            sender: 'agent',
+            text: `Submission could not be completed: ${failureSummary.message} ${failureSummary.suggestion}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+        return;
+      }
+
+      setOrchestratorFailure(null);
+      setOrchestratorResponse(data);
+      setSubmissionComplete(true);
+
+      setChatHistory(prev => [
+        ...prev,
+        {
+          id: 'orchestrator-submit-' + Date.now(),
+          sender: 'system',
+          text: `Supplier registration was submitted to the orchestrator successfully.${data?.workflow_action ? ` Workflow action: ${data.workflow_action}.` : ''}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    } catch (error: any) {
+      console.error('Registration submission failed:', error);
+      setChatHistory(prev => [
+        ...prev,
+        {
+          id: 'orchestrator-error-' + Date.now(),
+          sender: 'agent',
+          text: `We could not submit the registration request: ${error.message || 'Unknown error'}. Please try again.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    } finally {
+      setIsSubmittingRegistration(false);
+    }
   };
 
   const handleReset = () => {
     setRegistrationState(initialRegistrationState);
     setChatHistory([createWelcomeMessage()]);
     setSubmissionComplete(false);
+    setIsSubmittingRegistration(false);
+    setOrchestratorResponse(null);
+    setOrchestratorFailure(null);
+    setShowBackupContactPrompt(false);
+    setBackupContactAttempted(false);
+    setBackupContactErrors({});
   };
 
   // Steps calculation for visual progress bar tracking
@@ -1223,6 +1694,20 @@ Next Step: ${friendlyNextStep}`
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Trade License:</strong> TL_2024_GlobalTech.pdf <span className="text-emerald-600 ml-1 font-bold">(ACTIVE)</span></p>
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">VAT Account:</strong> Registered contributor status</p>
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Corporate Bank Account:</strong> Authoritative Verification Complete <span className="text-indigo-600 ml-1 font-bold">(AUTHORIZED)</span></p>
+              {orchestratorResponse && (
+                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Submission Orchestrator</p>
+                  <p className="mt-1 text-slate-700">
+                    Status: <strong className="text-slate-900">{String(orchestratorResponse.status || 'submitted')}</strong>
+                    {orchestratorResponse.workflow_action ? (
+                      <>
+                        {' '}
+                        | Workflow: <strong className="text-slate-900">{String(orchestratorResponse.workflow_action)}</strong>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              )}
               {registrationState.yearsInBusiness && (
                 <div className="border-t border-slate-200 pt-3 mt-3 font-sans text-slate-700 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
                   <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Vendor Type</span><strong className="text-slate-800 text-xs">{registrationState.vendorType || 'N/A'}</strong></div>
@@ -1265,11 +1750,272 @@ Next Step: ${friendlyNextStep}`
                 registrationState={registrationState}
                 setRegistrationState={setRegistrationState}
                 onSubmitRegistration={handleSubmitRegistration}
+                isSubmitting={isSubmittingRegistration}
               />
             </div>
           </div>
         )}
       </main>
+
+      {orchestratorFailure && !submissionComplete && (
+        <div className="fixed inset-0 z-[75] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white border border-rose-200 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-rose-100 bg-rose-50 flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-rose-500">Self Supplier Registration</p>
+                <h3 className="mt-1 text-lg font-black text-slate-900">Registration update needed</h3>
+                <p className="mt-2 text-xs text-slate-600 leading-relaxed max-w-xl">
+                  {orchestratorFailure.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrchestratorFailure(null)}
+                className="text-slate-400 hover:text-slate-700 transition-colors"
+                aria-label="Close submission failure dialog"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="rounded-xl border border-rose-100 bg-rose-50/60 px-4 py-3 text-sm text-rose-700 leading-relaxed">
+                <strong className="font-bold">Helpful next step:</strong> {orchestratorFailure.suggestion}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-600">
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 items-center">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400 leading-none">Reason</p>
+                  <p className="text-sm font-medium text-slate-800 leading-snug">{orchestratorFailure.message}</p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-[12px] text-indigo-700 leading-relaxed">
+                Please update the <strong className="font-semibold text-slate-900">primary contact</strong> details below. This will update the first contact record used for submission.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Full Name</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={registrationState.contactName || ''}
+                    onChange={(e) => setRegistrationState(prev => ({ ...prev, contactName: e.target.value }))}
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    placeholder="Update the primary contact name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Email Address</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={registrationState.contactEmail || ''}
+                    onChange={(e) => setRegistrationState(prev => ({ ...prev, contactEmail: e.target.value }))}
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    placeholder="Update the primary email address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Mobile Number</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="tel"
+                    value={registrationState.phoneNumber || ''}
+                    onChange={(e) => setRegistrationState(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    placeholder="Update the primary mobile number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Trade License Number</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={registrationState.tradeLicenseNumber || ''}
+                    onChange={(e) => setRegistrationState(prev => ({ ...prev, tradeLicenseNumber: e.target.value }))}
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    placeholder="Optional: update the license number"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-600 leading-relaxed">
+                Please update the primary contact name, email address, or mobile number before retrying the submission.
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setOrchestratorFailure(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-100 transition"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrchestratorFailure(null);
+                  void handleSubmitRegistration();
+                }}
+                className="px-5 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-black transition"
+              >
+                Retry Submission
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBackupContactPrompt && !submissionComplete && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 bg-white flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-indigo-500">Notification Contact Setup</p>
+                <h3 className="mt-1 text-lg font-black text-slate-900">Please add one more contact person</h3>
+                <p className="mt-2 text-xs text-slate-500 leading-relaxed max-w-2xl">
+                  For account verification, we need one more contact person and email address to reach out to you if your primary contact is unavailable.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBackupContactPrompt(false);
+                  setBackupContactAttempted(false);
+                  setBackupContactErrors({});
+                }}
+                className="text-slate-400 hover:text-slate-700 transition-colors"
+                aria-label="Close notification contact prompt"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 pb-6 space-y-4">
+              {backupContactAttempted && Object.keys(backupContactErrors).length > 0 && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Please fill in the additional contact details correctly before continuing.</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span>Full Name</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  value={registrationState.backupContactName || ''}
+                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactName: e.target.value }))}
+                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
+                    backupContactAttempted && backupContactErrors.name
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
+                />
+                {backupContactAttempted && backupContactErrors.name && (
+                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{backupContactErrors.name}</span>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span>Primary Notification Email</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="john.doe@company.com"
+                  value={registrationState.backupContactEmail || ''}
+                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactEmail: e.target.value }))}
+                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
+                    backupContactAttempted && backupContactErrors.email
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
+                />
+                {backupContactAttempted && backupContactErrors.email && (
+                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{backupContactErrors.email}</span>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span>UAE Mobile Phone Number</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="tel"
+                  placeholder="0500000003"
+                  value={registrationState.backupContactPhone || ''}
+                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactPhone: e.target.value }))}
+                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
+                    backupContactAttempted && backupContactErrors.phone
+                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
+                      : 'border-slate-200 focus:border-indigo-500'
+                  }`}
+                />
+                {backupContactAttempted && backupContactErrors.phone && (
+                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>{backupContactErrors.phone}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBackupContactPrompt(false);
+                  setBackupContactAttempted(false);
+                  setBackupContactErrors({});
+                }}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBackupContactAttempted(true);
+                  const nextErrors = getBackupContactValidation();
+                  setBackupContactErrors(nextErrors);
+                  if (Object.keys(nextErrors).length === 0) {
+                    void handleSubmitRegistration();
+                  }
+                }}
+                className="px-5 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-black transition"
+              >
+                Save Contact Config & Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Registry Drawer modal sheet */}
       {showRegistryDrawer && (

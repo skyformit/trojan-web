@@ -5,13 +5,15 @@ import { SupplierRegistrationState, DocumentVerification } from '../types';
 interface VerificationPanelProps {
   registrationState: SupplierRegistrationState;
   setRegistrationState: React.Dispatch<React.SetStateAction<SupplierRegistrationState>>;
-  onSubmitRegistration: () => void;
+  onSubmitRegistration: () => void | Promise<void>;
+  isSubmitting?: boolean;
 }
 
 export default function VerificationPanel({
   registrationState,
   setRegistrationState,
-  onSubmitRegistration
+  onSubmitRegistration,
+  isSubmitting = false
 }: VerificationPanelProps) {
   const { trade_license, vat_certificate, bank_document } = registrationState.documents;
   const [activeTab, setActiveTab] = useState<'status' | 'trade' | 'vat' | 'bank_document'>('status');
@@ -584,6 +586,7 @@ export default function VerificationPanel({
               <button
                 onClick={onSubmitRegistration}
                 disabled={
+                  isSubmitting ||
                   !(
                     registrationState.vendorType &&
                     registrationState.surveyProduct &&
@@ -601,8 +604,8 @@ export default function VerificationPanel({
                 }
                 className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold py-4 rounded-sm flex items-center justify-center gap-2 transition uppercase tracking-widest pointer-events-auto cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Complete & Publish Supplier Registration</span>
+                <Save className={`w-4 h-4 ${isSubmitting ? 'animate-pulse' : ''}`} />
+                <span>{isSubmitting ? 'Submitting Registration...' : 'Complete & Publish Supplier Registration'}</span>
               </button>
             </div>
           ) : (

@@ -37,6 +37,7 @@ export type PagesEnvBindings = {
   TBMS_RECONCILIATION_ENDPOINT?: string;
   HIDL_APPROVAL?: string;
   APPROVAL_REVIEW_ENDPOINT?: string;
+  TBMS_ORCHESTRATOR_ENDPOINT?: string;
 };
 
 export const governmentRegistries = [
