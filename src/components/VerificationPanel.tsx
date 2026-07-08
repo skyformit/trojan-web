@@ -176,6 +176,9 @@ export default function VerificationPanel({
     if (doc.type === 'bank_document') {
       return (
         doc.extractedData?.companyName ||
+        doc.extractedData?.beneficiaryName ||
+        doc.extractedData?.accountName ||
+        doc.extractedData?.bankHolderName ||
         doc.extractedData?.tradeName ||
         doc.extractedData?.bankName ||
         doc.extractedData?.bankAccountNumber ||
@@ -605,7 +608,7 @@ export default function VerificationPanel({
                 className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold py-4 rounded-sm flex items-center justify-center gap-2 transition uppercase tracking-widest pointer-events-auto cursor-pointer"
               >
                 <Save className={`w-4 h-4 ${isSubmitting ? 'animate-pulse' : ''}`} />
-                <span>{isSubmitting ? 'Submitting Registration...' : 'Complete & Publish Supplier Registration'}</span>
+                <span>{isSubmitting ? 'Sending registration request to TBMS...' : 'Complete & Publish Supplier Registration'}</span>
               </button>
             </div>
           ) : (
@@ -810,8 +813,8 @@ export default function VerificationPanel({
         [
           { key: 'bankAccountNumber', label: 'Account Number/IBAN' },
           { key: 'bankName', label: 'Financial Institution' },
-          { key: 'companyName', label: 'Beneficiary Name' },
-          { key: 'status', label: 'Account Standing' }
+          { key: 'beneficiaryName', label: 'Beneficiary Name' },
+          { key: 'iban', label: 'IBAN Number' }
         ]
       )}
     </div>

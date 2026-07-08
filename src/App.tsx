@@ -23,14 +23,20 @@ import VerificationPanel from './components/VerificationPanel';
 import { streamChatMessage } from './utils/chatStream';
 import TrojanLogo from './components/TrojanLogo';
 
-function getDisplayOcrName(extracted: Record<string, any>) {
-  return (
-    extracted?.tradeName ||
-    extracted?.companyName ||
-    extracted?.legalNameEnglish ||
-    extracted?.businessName ||
-    'N/A'
-  );
+function getDisplayOcrName(extracted: Record<string, any>, documentType?: 'trade_license' | 'vat_certificate' | 'bank_document') {
+  if (documentType === 'bank_document') {
+    return (
+      extracted?.accountName ||
+      extracted?.bankHolderName ||
+      extracted?.beneficiaryName ||
+      extracted?.companyName ||
+      extracted?.tradeName ||
+      extracted?.bankName ||
+      'N/A'
+    );
+  }
+
+  return extracted?.tradeName || extracted?.companyName || extracted?.legalNameEnglish || extracted?.businessName || 'N/A';
 }
 
 function getDisplayTradeName(extracted: Record<string, any>) {
@@ -157,7 +163,16 @@ function summarizeOrchestratorFailure(response: Record<string, any> | null) {
     return {
       title: 'Submission blocked: username already exists',
       message: 'The orchestrator could not create the vendor because the username already exists.',
-      suggestion: 'Please change the username, vendor name, or email address, then submit again.',
+      suggestion: 'Please change the vendor name or email address, then submit again.',
+      failedStep: String(response?.failed_step || 'basic_info_insert'),
+    };
+  }
+
+  if (normalized.includes('emailid already exists') || normalized.includes('email id already exists') || normalized.includes('email already exists')) {
+    return {
+      title: 'Submission blocked: email already exists',
+      message: 'The orchestrator could not create the vendor because the email address already exists.',
+      suggestion: 'Please update the email address and try submitting again.',
       failedStep: String(response?.failed_step || 'basic_info_insert'),
     };
   }
@@ -166,7 +181,7 @@ function summarizeOrchestratorFailure(response: Record<string, any> | null) {
     return {
       title: 'Submission blocked: duplicate record found',
       message: 'The orchestrator found a record that already exists.',
-      suggestion: 'Please update the vendor name, username, or email address and retry.',
+      suggestion: 'Please update the vendor name or email address and retry.',
       failedStep: String(response?.failed_step || 'basic_info_insert'),
     };
   }
@@ -595,15 +610,30 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
   }
 
   if (documentType === 'bank_document') {
+    const bankAccountName = normalized.accountName ||
+      normalized.beneficiaryName ||
+      normalized.bankHolderName ||
+      getResultValue(rawResults, [
+        'AccountName',
+        'account_name',
+        'AccountHolderName',
+        'account_holder_name',
+        'BeneficiaryName',
+        'beneficiary_name',
+        'Beneficiary',
+        'beneficiary'
+      ]);
+
     return {
       ...normalized,
       tradeName: normalized.tradeName || tradeName,
-      companyName: normalized.companyName || tradeName,
+      companyName: normalized.companyName || bankAccountName || tradeName,
+      accountName: normalized.accountName || bankAccountName,
+      beneficiaryName: normalized.beneficiaryName || bankAccountName,
       bankAccountNumber: normalized.bankAccountNumber || getResultValue(rawResults, ['BankAccountNumber', 'AccountNumber', 'IBAN']),
-      bankName: normalized.bankName || getResultValue(rawResults, ['BankName', 'Bank']),
+      bankName: normalized.bankName || getResultValue(rawResults, ['BankName', 'bank_name', 'Bank']),
       iban: normalized.iban || getResultValue(rawResults, ['IBAN']),
-      accountName: normalized.accountName || getResultValue(rawResults, ['AccountName']),
-      bankHolderName: normalized.bankHolderName || getResultValue(rawResults, ['AccountName', 'TradeName', 'CompanyName', 'LegalNameEnglish', 'BusinessName']),
+      bankHolderName: normalized.bankHolderName || bankAccountName,
     };
   }
 
@@ -895,6 +925,14 @@ export default function App() {
   const [showBackupContactPrompt, setShowBackupContactPrompt] = useState(false);
   const [backupContactAttempted, setBackupContactAttempted] = useState(false);
   const [backupContactErrors, setBackupContactErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const orchestratorVendorId = String(
+    orchestratorResponse?.vendID ??
+    orchestratorResponse?.vendId ??
+    orchestratorResponse?.data?.vendID ??
+    orchestratorResponse?.data?.vendId ??
+    ''
+  ).trim();
+  const orchestratorFinalStatus = orchestratorResponse?.final_status || {};
 
   // Fetch sandbox records from server to display in helper drawer
   const fetchRegistryRecords = async () => {
@@ -1247,7 +1285,7 @@ export default function App() {
           },
           validationLogs: [
             ...doc.validationLogs,
-            `OCR company: "${getDisplayOcrName(extracted)}"`,
+            `OCR company: "${getDisplayOcrName(extracted, type)}"`,
             `Trade name: "${getDisplayTradeName(extracted)}"`,
             `Result status: ${decisionLabel}`,
             ...finalLogEntries,
@@ -1285,7 +1323,7 @@ export default function App() {
         uiDecision === 'approved'
           ? `[[DOCUMENT_ACCEPTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
-OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+OCR Scanned Name: "${getDisplayOcrName(extracted, type)}"
 Acceptance Status: Approved
 Next Step: ${
               type === 'trade_license'
@@ -1297,18 +1335,18 @@ Next Step: ${
           : uiDecision === 'review'
             ? `[[DOCUMENT_REVIEW]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
-OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+OCR Scanned Name: "${getDisplayOcrName(extracted, type)}"
 Review Note: ${friendlyReason}
 Next Step: We will continue once the review is complete.`
           : uiDecision === 'expired'
             ? `[[DOCUMENT_EXPIRED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
-OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+OCR Scanned Name: "${getDisplayOcrName(extracted, type)}"
 Expiry Note: ${friendlyReason}
 Next Step: ${friendlyNextStep}`
           : `[[DOCUMENT_REJECTED]]
 Document Type: ${type.replace(/_/g, ' ').toUpperCase()}
-OCR Scanned Name: "${getDisplayOcrName(extracted)}"
+OCR Scanned Name: "${getDisplayOcrName(extracted, type)}"
 Rejection Summary: ${friendlyReason}
 Next Step: ${friendlyNextStep}`
       );
@@ -1392,8 +1430,8 @@ Next Step: ${friendlyNextStep}`
       Boolean(registrationState.backupContactPhone?.trim());
 
     if (!hasBackupContact || Object.keys(backupErrors).length > 0) {
-      setBackupContactAttempted(true);
-      setBackupContactErrors(backupErrors);
+      setBackupContactAttempted(false);
+      setBackupContactErrors({});
       setShowBackupContactPrompt(true);
       return;
     }
@@ -1585,6 +1623,12 @@ Next Step: ${friendlyNextStep}`
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col selection:bg-indigo-600 selection:text-white">
+      <style>{`
+        @keyframes tbms-submit-shimmer {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(320%); }
+        }
+      `}</style>
       {/* Dynamic Banner Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -1605,6 +1649,23 @@ Next Step: ${friendlyNextStep}`
 
       {/* Main Container Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+        {isSubmittingRegistration && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-4 py-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-indigo-500">Submission in progress</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">Sending registration request to TBMS...</p>
+              </div>
+              <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest">Please wait</div>
+            </div>
+            <div className="h-2 rounded-full bg-indigo-100 overflow-hidden relative">
+              <div className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-indigo-500"
+                style={{ animation: 'tbms-submit-shimmer 1.25s linear infinite' }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Visual Registration Lifecycle Progress Bar */}
         <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
@@ -1719,27 +1780,35 @@ Next Step: ${friendlyNextStep}`
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Supplier Registration Successful!</h2>
               <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
-                 Your enterprise registered for active procurement . Your Transaction Id is 346.
+                 Your enterprise registered for active procurement.
               </p>
             </div>
 
             <div className="bg-slate-50 p-5 rounded border border-slate-200 text-left font-mono text-xs text-slate-600 space-y-2">
               <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block">Business Name:</strong> {registrationState.companyName || "Dynamic Tech Enterprises Corp"}</p>
-              <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Trade License:</strong> TL_2024_GlobalTech.pdf <span className="text-emerald-600 ml-1 font-bold">(ACTIVE)</span></p>
-              <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">VAT Account:</strong> Registered contributor status</p>
-              <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block mt-1">Corporate Bank Account:</strong> Authoritative Verification Complete <span className="text-indigo-600 ml-1 font-bold">(AUTHORIZED)</span></p>
               {orchestratorResponse && (
-                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Submission Orchestrator</p>
-                  <p className="mt-1 text-slate-700">
-                    Status: <strong className="text-slate-900">{String(orchestratorResponse.status || 'submitted')}</strong>
-                    {orchestratorResponse.workflow_action ? (
-                      <>
-                        {' '}
-                        | Workflow: <strong className="text-slate-900">{String(orchestratorResponse.workflow_action)}</strong>
-                      </>
+                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-left space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Submission Status</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
+                    <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Submitted</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {String(orchestratorFinalStatus.submitted ? 'Yes' : 'No')}
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Approved</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {String(orchestratorFinalStatus.approved ? 'Yes' : 'No')}
+                      </p>
+                    </div>
+                    {orchestratorVendorId ? (
+                      <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2 sm:col-span-2">
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Registration Vendor ID</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{orchestratorVendorId}</p>
+                      </div>
                     ) : null}
-                  </p>
+                  </div>
                 </div>
               )}
               {registrationState.yearsInBusiness && (
@@ -1823,24 +1892,10 @@ Next Step: ${friendlyNextStep}`
                 </div>
               </div>
               <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-[12px] text-indigo-700 leading-relaxed">
-                Please update the <strong className="font-semibold text-slate-900">primary contact</strong> details below. This will update the first contact record used for submission.
+                Please update the <strong className="font-semibold text-slate-900">email address</strong> below. This will update the record used for submission.
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                    <span>Full Name</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={registrationState.contactName || ''}
-                    onChange={(e) => setRegistrationState(prev => ({ ...prev, contactName: e.target.value }))}
-                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
-                    placeholder="Update the primary contact name"
-                  />
-                </div>
-
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
@@ -1862,9 +1917,12 @@ Next Step: ${friendlyNextStep}`
                   </label>
                   <input
                     type="text"
-                    inputMode="tel"
+                    inputMode="numeric"
                     value={registrationState.phoneNumber || ''}
-                    onChange={(e) => setRegistrationState(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '');
+                      setRegistrationState(prev => ({ ...prev, phoneNumber: digitsOnly }));
+                    }}
                     className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
                     placeholder="Update the primary mobile number"
                   />
@@ -1886,7 +1944,7 @@ Next Step: ${friendlyNextStep}`
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-600 leading-relaxed">
-                Please update the primary contact name, email address, or mobile number before retrying the submission.
+                Please update the email address or mobile number before retrying the submission.
               </div>
             </div>
 
@@ -2001,10 +2059,13 @@ Next Step: ${friendlyNextStep}`
                 </label>
                 <input
                   type="text"
-                  inputMode="tel"
+                  inputMode="numeric"
                   placeholder="0500000003"
                   value={registrationState.backupContactPhone || ''}
-                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactPhone: e.target.value }))}
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '');
+                    setRegistrationState(prev => ({ ...prev, backupContactPhone: digitsOnly }));
+                  }}
                   className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
                     backupContactAttempted && backupContactErrors.phone
                       ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
@@ -2044,7 +2105,7 @@ Next Step: ${friendlyNextStep}`
                 }}
                 className="px-5 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-black transition"
               >
-                Save Contact Config & Submit
+                Submit
               </button>
             </div>
           </div>

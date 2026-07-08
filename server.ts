@@ -25,7 +25,11 @@ const APPROVAL_REVIEW_ENDPOINT =
   process.env.APPROVAL_REVIEW_ENDPOINT ||
   process.env.HIDL_APPROVAL ||
   "";
-const TBMS_ORCHESTRATOR_ENDPOINT = process.env.TBMS_ORCHESTRATOR_ENDPOINT;
+const TBMS_ORCHESTRATOR_ENDPOINT =
+  process.env.TBMS_ORCHESTRATOR_ENDPOINT ||
+  process.env.TBMS_ORCHESTRATION_ENDPOINT ||
+  process.env.TBMS_ORCHESTRATOR ||
+  "https://tch-function-gxbndjf4gzhad6eu.uaenorth-01.azurewebsites.net/api/agent-tbms-orchestrator?code=GDTM4c0yAfM5OhdmC9uTTYbJh4Vg5rO4JzjBR4INYyYMAzFuixAauw%3D%3D";
 
 type DocumentType = "trade_license" | "vat_certificate" | "bank_document";
 
@@ -685,6 +689,14 @@ app.post("/api/agent-approval-review", async (req, res) => {
 
 app.post("/api/agent-tbms-orchestrator", async (req, res) => {
   try {
+    if (!TBMS_ORCHESTRATOR_ENDPOINT) {
+      return res.status(500).json({
+        ok: false,
+        status: "error",
+        text: "TBMS orchestrator endpoint is not configured. Please set TBMS_ORCHESTRATOR_ENDPOINT in .env and restart the server.",
+      });
+    }
+
     const externalRes = await fetch(TBMS_ORCHESTRATOR_ENDPOINT, {
       method: "POST",
       headers: {
