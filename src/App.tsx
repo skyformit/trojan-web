@@ -88,6 +88,39 @@ function keepStrictMidnightIsoDate(value?: string | null) {
   return /^\d{4}-\d{2}-\d{2}T00:00:00$/.test(input) ? input : undefined;
 }
 
+function formatDobForSubmission(value?: string | null) {
+  const input = String(value || '').trim();
+  if (!input) return undefined;
+
+  const dmy = input.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (dmy) {
+    const [, dd, mm, yyyy] = dmy;
+    return `${dd.padStart(2, '0')}-${mm.padStart(2, '0')}-${yyyy}`;
+  }
+
+  const slashDmy = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDmy) {
+    const [, dd, mm, yyyy] = slashDmy;
+    return `${dd.padStart(2, '0')}-${mm.padStart(2, '0')}-${yyyy}`;
+  }
+
+  const isoLike = input.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoLike) {
+    const [, yyyy, mm, dd] = isoLike;
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
+  const parsed = new Date(input);
+  if (!Number.isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(parsed.getFullYear());
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
+  return undefined;
+}
+
 function normalizeComparisonValue(value?: string | null) {
   return String(value || '')
     .trim()
@@ -651,6 +684,7 @@ function buildOrchestratorSubmissionPayload(registrationState: SupplierRegistrat
   const backupContactName = String(registrationState.backupContactName || '').trim();
   const backupContactEmail = String(registrationState.backupContactEmail || '').trim();
   const backupContactPhone = String(registrationState.backupContactPhone || '').trim();
+  const dob = formatDobForSubmission((registrationState as Record<string, any>).dob || (registrationState as Record<string, any>).dateOfBirth || '');
   const conversationId =
     tradeDoc.agent2Response &&
     typeof tradeDoc.agent2Response === 'object' &&
@@ -772,7 +806,7 @@ function buildOrchestratorSubmissionPayload(registrationState: SupplierRegistrat
     backupContactPhone: backupContactPhone || undefined,
     eidNo: '',
     passportNo: '',
-    dob: '',
+    ...(dob ? { dob } : {}),
     nationality: 1,
     sharePercentage: 50,
     ownershipType: 1,
