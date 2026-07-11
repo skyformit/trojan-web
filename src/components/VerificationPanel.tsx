@@ -290,10 +290,10 @@ export default function VerificationPanel({
       <div className="space-y-2.5">
         {/* Core summary card */}
         <div className="rounded-[18px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(244,248,255,0.98)_0%,rgba(236,243,253,0.98)_46%,rgba(249,250,255,0.99)_100%)] px-3 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:px-4 md:py-2.5">
-          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">Overall Decision</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-[var(--brand-gray-light)]">Overall Decision</p>
 
           <div className="mt-2 grid grid-cols-[minmax(80px,auto)_minmax(0,1fr)_auto] items-center gap-2 md:gap-2.5">
-            <div className="relative flex h-[80px] w-[80px] items-center justify-center rounded-full bg-slate-100/80 shadow-[inset_0_0_0_1px_rgba(226,232,240,1)] md:h-[88px] md:w-[88px]">
+            <div className="relative flex h-[80px] w-[80px] items-center justify-center rounded-full bg-[color:rgba(83,86,90,0.08)] shadow-[inset_0_0_0_1px_rgba(44,53,97,0.10)] md:h-[88px] md:w-[88px]">
               <div
                 className="absolute inset-0 rounded-full p-[4px] md:p-[5px]"
                 style={scoreRingStyle}
@@ -302,29 +302,29 @@ export default function VerificationPanel({
               </div>
               <div className="relative z-10 flex flex-col items-center justify-center text-center">
                 <span className="text-[22px] font-black leading-none tracking-tight text-[var(--brand-primary)] md:text-[26px]">{score}%</span>
-                <span className="mt-0.5 text-[6px] font-black uppercase tracking-[0.2em] text-slate-500 md:text-[7px]">Validated</span>
+                <span className="mt-0.5 text-[6px] font-black uppercase tracking-[0.2em] text-[var(--brand-neutral)] md:text-[7px]">Validated</span>
               </div>
             </div>
 
-            <div className="flex flex-col justify-center gap-0.5 pl-0 text-[12px] font-medium text-slate-600 md:text-[13px]">
+            <div className="flex flex-col justify-center gap-0.5 pl-0 text-[12px] font-medium text-[var(--brand-neutral)] md:text-[13px]">
               <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
                 <span>Identity</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
                 <span>Documents</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
                 <span>Compliance</span>
               </div>
             </div>
 
             <div>
               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">Pending</p>
-              <p className="mt-1 text-[16px] font-black leading-none text-slate-950 md:text-[20px]">0 / 3</p>
-              <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-slate-500">Awaiting</p>
+              <p className="mt-1 text-[16px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[20px]">0 / 3</p>
+              <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-[var(--brand-neutral)]">Awaiting</p>
             </div>
           </div>
         </div>
@@ -338,28 +338,28 @@ export default function VerificationPanel({
           {registrationState.contactName ? (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
-                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Full Name</span>
-                <span className="mt-1 block truncate text-[13px] font-black text-slate-900">{registrationState.contactName}</span>
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-[var(--brand-gray-light)]">Full Name</span>
+                <span className="mt-1 block truncate text-[13px] font-black text-[var(--brand-primary-deep)]">{registrationState.contactName}</span>
               </div>
               <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
-                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Notification Email</span>
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-[var(--brand-gray-light)]">Notification Email</span>
                 <span className="mt-1 block truncate text-[13px] font-black text-[var(--brand-primary)]" title={registrationState.contactEmail}>{registrationState.contactEmail || 'N/A'}</span>
               </div>
               <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
-                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Mobile/SMS Contact</span>
-                <span className="mt-1 block truncate font-mono text-[13px] font-medium text-slate-800">{registrationState.phoneNumber || 'N/A'}</span>
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-[var(--brand-gray-light)]">Mobile/SMS Contact</span>
+                <span className="mt-1 block truncate font-mono text-[13px] font-medium text-[var(--brand-primary-deep)]">{registrationState.phoneNumber || 'N/A'}</span>
               </div>
             </div>
           ) : (
-            <p className="rounded-[14px] border border-[color:rgba(44,53,97,0.1)] bg-white/70 px-3 py-2.5 text-[10px] italic text-slate-500 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
+            <p className="rounded-[14px] border border-[color:rgba(44,53,97,0.1)] bg-white/70 px-3 py-2.5 text-[10px] italic text-[var(--brand-neutral)] shadow-[0_6px_14px_rgba(15,23,42,0.04)]">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
           )}
         </div>
 
         {/* Compliance Checklist status breakdown */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between gap-2.5">
-            <h4 className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.28em] text-slate-500">
-              <Database className="h-3.5 w-3.5 text-slate-400" /> Required Identification Badges
+            <h4 className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.28em] text-[var(--brand-neutral)]">
+              <Database className="h-3.5 w-3.5 text-[var(--brand-gray-light)]" /> Required Identification Badges
             </h4>
             <span className="text-[8px] font-black uppercase tracking-[0.22em] text-[var(--brand-primary)]">{[trade_license, vat_certificate, bank_document].filter(doc => getEffectiveDocStatus(doc) === 'verified').length} / 3</span>
           </div>

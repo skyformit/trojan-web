@@ -54,14 +54,14 @@ export default function PortalStepper({
 
             const isLive = isCurrent || isActive;
             const circleClass = isFailed
-              ? 'bg-slate-100 border-slate-300 text-[var(--brand-primary-deep)]'
+              ? 'bg-[color:rgba(83,86,90,0.08)] border-[color:rgba(83,86,90,0.18)] text-[var(--brand-primary-deep)]'
               : isReview
-                ? 'bg-white border-slate-200 text-[var(--brand-primary)]'
+                ? 'bg-white border-[color:rgba(44,53,97,0.12)] text-[var(--brand-primary)]'
                 : isLive
                   ? 'bg-[linear-gradient(180deg,var(--brand-primary)_0%,var(--brand-primary-mid)_56%,var(--brand-sky)_100%)] border-white text-white shadow-[0_14px_32px_rgba(44,53,97,0.28)] ring-4 ring-[color:rgba(44,53,97,0.08)]'
                   : isPast
-                    ? 'bg-white border-slate-200 text-slate-500 shadow-[0_6px_14px_rgba(15,23,42,0.08)]'
-                    : 'bg-white border-slate-200 text-slate-500 shadow-[0_6px_14px_rgba(15,23,42,0.08)]';
+                    ? 'bg-white border-[color:rgba(44,53,97,0.12)] text-[var(--brand-neutral)] shadow-[0_6px_14px_rgba(15,23,42,0.08)]'
+                    : 'bg-white border-[color:rgba(44,53,97,0.12)] text-[var(--brand-neutral)] shadow-[0_6px_14px_rgba(15,23,42,0.08)]';
 
             return (
               <div key={step.id} className="relative flex flex-col items-center text-center">
@@ -78,7 +78,7 @@ export default function PortalStepper({
                         step.icon(isActive, isCompleted)
                       )}
                     </div>
-                  <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-100 bg-white text-[9px] font-extrabold text-slate-900 shadow-[0_6px_14px_rgba(15,23,42,0.12)] md:h-7 md:w-7 md:text-[9px]">
+                  <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[color:rgba(44,53,97,0.08)] bg-white text-[9px] font-extrabold text-[var(--brand-primary-deep)] shadow-[0_6px_14px_rgba(15,23,42,0.12)] md:h-7 md:w-7 md:text-[9px]">
                     {step.id}
                   </span>
                 </div>
@@ -101,14 +101,14 @@ export default function PortalStepper({
                     <span
                       className={`mx-auto inline-flex rounded-full border px-2.5 py-[3px] text-[7px] font-extrabold uppercase tracking-[0.24em] md:px-3 md:py-[4px] md:text-[7px] md:tracking-[0.25em] ${
                         isFailed
-                          ? 'border-slate-200 bg-slate-100 text-slate-500'
+                          ? 'border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(83,86,90,0.08)] text-[var(--brand-neutral)]'
                           : isReview
-                            ? 'border-slate-200 bg-white text-slate-500'
+                            ? 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-neutral)]'
                             : isCompleted || (step.id < currentStepIndex && !isCurrent)
-                                ? 'border-slate-200 bg-white text-slate-500'
+                                ? 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-neutral)]'
                               : isCurrent || isActive
                                 ? 'border-[color:rgba(44,53,97,0.18)] bg-[var(--brand-sky)] text-white shadow-[0_8px_18px_rgba(0,142,185,0.22)]'
-                                : 'border-slate-200 bg-white text-slate-400'
+                                : 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-gray-light)]'
                       }`}
                     >
                       {isFailed

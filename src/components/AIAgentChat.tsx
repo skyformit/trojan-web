@@ -72,7 +72,7 @@ export default function AIAgentChat({
 
   const renderFormattedText = (text: string, tone: 'agent' | 'user' = 'agent') => {
     const normalizedText = text.replace(/\r\n/g, '\n').trim();
-    const bodyClass = tone === 'user' ? 'text-white' : 'text-slate-800';
+    const bodyClass = tone === 'user' ? 'text-white' : 'text-[var(--brand-primary-deep)]';
 
     const renderInlineSegments = (value: string) => {
       const parts = value.split(/(\[\[accent\]\][\s\S]+?\[\[\/accent\]\]|\*\*[^*]+\*\*)/g);
@@ -80,7 +80,7 @@ export default function AIAgentChat({
       return parts.map((part, index) => {
         if (part.startsWith('[[accent]]') && part.endsWith('[[/accent]]') && part.length > '[[accent]][[/accent]]'.length) {
           return (
-            <span key={`${index}-${part}`} className={`font-semibold ${tone === 'user' ? 'text-white' : 'text-[var(--brand-sky-light)]'}`}>
+              <span key={`${index}-${part}`} className={`font-semibold ${tone === 'user' ? 'text-white' : 'text-[var(--brand-sky-light)]'}`}>
               {part.slice('[[accent]]'.length, -'[[/accent]]'.length)}
             </span>
           );
@@ -88,7 +88,7 @@ export default function AIAgentChat({
 
         if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
           return (
-            <strong key={`${index}-${part}`} className={`font-semibold ${tone === 'user' ? 'text-white' : 'text-slate-900'}`}>
+            <strong key={`${index}-${part}`} className={`font-semibold ${tone === 'user' ? 'text-white' : 'text-[var(--brand-primary-deep)]'}`}>
               {part.slice(2, -2)}
             </strong>
           );
@@ -212,15 +212,15 @@ export default function AIAgentChat({
 
       return (
         <div className="max-w-[66ch] space-y-3.5 pr-2">
-          <p className="text-[14px] leading-[1.42] text-slate-700">
+          <p className="text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
             Hello and welcome to the <span className="font-semibold text-[var(--brand-sky)]">Secure Supplier Portal!</span> 💎
           </p>
 
-          <p className="text-[14px] leading-[1.42] text-slate-700">
+          <p className="text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
             I am your AI Onboarding Assistant. I am here to guide you step-by-step<br />
             through our supplier registration program. To align with corporate and<br />
             compliance standards, we require authentication of{' '}
-            <strong className="font-semibold text-slate-900">three vital company certificates</strong><br />
+            <strong className="font-semibold text-[var(--brand-primary-deep)]">three vital company certificates</strong><br />
             in real-time:
           </p>
 
@@ -230,14 +230,14 @@ export default function AIAgentChat({
                 <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[12px] bg-[var(--brand-sky)] text-[13px] font-black text-white shadow-[0_10px_18px_rgba(0,142,185,0.18)] ring-4 ring-[color:rgba(0,142,185,0.10)]">
                   {index + 1}
                 </span>
-                <p className="max-w-[36ch] text-[14px] font-semibold leading-[1.32] text-slate-900">
+                <p className="max-w-[36ch] text-[14px] font-semibold leading-[1.32] text-[var(--brand-primary-deep)]">
                   {item}
                 </p>
               </div>
             ))}
           </div>
 
-          <p className="text-[14px] leading-[1.42] text-slate-700">
+          <p className="text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
             Let&apos;s begin!{' '}
             <span className="font-semibold text-[var(--brand-sky)]">
               What is the registered Commercial Name of your Enterprise?
@@ -382,7 +382,7 @@ export default function AIAgentChat({
             ))}
           </div>
 
-          <div className="rounded-lg bg-[color:rgba(44,53,97,0.06)] border border-[color:rgba(44,53,97,0.14)] px-3 py-2 text-xs text-slate-800">
+          <div className="rounded-lg bg-[color:rgba(44,53,97,0.06)] border border-[color:rgba(44,53,97,0.14)] px-3 py-2 text-xs text-[var(--brand-primary-deep)]">
             <span className="font-bold text-[var(--brand-primary)]">Next Step:</span>{' '}
             {rowMap['Next Step'] || 'Please continue with the next onboarding step.'}
           </div>
@@ -419,7 +419,7 @@ export default function AIAgentChat({
             ))}
           </div>
 
-          <div className="rounded-lg bg-[color:rgba(44,53,97,0.06)] border border-[color:rgba(44,53,97,0.14)] px-3 py-2 text-xs text-slate-800">
+          <div className="rounded-lg bg-[color:rgba(44,53,97,0.06)] border border-[color:rgba(44,53,97,0.14)] px-3 py-2 text-xs text-[var(--brand-primary-deep)]">
             <span className="font-bold text-[var(--brand-primary)]">Next Step:</span>{' '}
             {rowMap['Next Step'] || 'Please upload or drop your Valid Trade License (PDF) to proceed.'}
             <div className="mt-1 text-[11px] text-slate-600">
@@ -446,10 +446,10 @@ export default function AIAgentChat({
             <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-[2px] border-white bg-[var(--brand-success)] shadow-[0_0_0_2px_rgba(25,184,107,0.08)]" />
           </div>
           <div>
-            <h2 className="text-[16px] font-black tracking-tight text-slate-950 md:text-[18px]">
-              Onboarding Officer <span className="font-semibold text-slate-500">(AI Agent)</span>
+            <h2 className="text-[16px] font-black tracking-tight text-[var(--brand-primary-deep)] md:text-[18px]">
+              Onboarding Officer <span className="font-semibold text-[var(--brand-neutral)]">(AI Agent)</span>
             </h2>
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 md:text-[11px]">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[var(--brand-neutral)] md:text-[11px]">
               <span className="w-2 h-2 rounded-full bg-[var(--brand-sky)] shadow-[0_0_0_4px_rgba(0,142,185,0.12)]" />
               <span>Real-time OCR Validation · Online</span>
             </div>
@@ -534,8 +534,8 @@ export default function AIAgentChat({
 
       {/* Input Form area */}
       {!showContactSetup && (
-      <div className="border-t border-slate-200 bg-white/95 px-4 py-1.5 backdrop-blur">
-          <div className="rounded-[22px] border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] px-3 py-[2px]">
+      <div className="border-t border-[color:rgba(44,53,97,0.12)] bg-white/95 px-4 py-1.5 backdrop-blur">
+          <div className="rounded-[22px] border border-[color:rgba(44,53,97,0.12)] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] px-3 py-[2px]">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -545,7 +545,7 @@ export default function AIAgentChat({
                   }
                 }}
                 disabled={!effectiveUploadType}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-400 transition hover:border-[color:rgba(44,53,97,0.18)] hover:text-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(83,86,90,0.06)] text-[var(--brand-gray-light)] transition hover:border-[color:rgba(44,53,97,0.18)] hover:text-[var(--brand-primary)] disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Attach file"
               >
                 <Paperclip className="h-4 w-4" />
@@ -565,13 +565,13 @@ export default function AIAgentChat({
                     ? 'Processing request...'
                     : 'Describe the supplier request to route it...'
               }
-              className="min-h-[38px] flex-1 rounded-full border border-transparent bg-transparent px-3 text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              className="min-h-[38px] flex-1 rounded-full border border-transparent bg-transparent px-3 text-[13px] text-[var(--brand-primary-deep)] placeholder:text-[var(--brand-gray-light)] focus:outline-none"
               disabled={isUploading || isRequestInProgress}
             />
-              <div className="flex items-center gap-2 pr-1 text-slate-400">
+              <div className="flex items-center gap-2 pr-1 text-[var(--brand-gray-light)]">
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 transition hover:border-[color:rgba(44,53,97,0.18)] hover:text-[var(--brand-primary)]"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(83,86,90,0.06)] transition hover:border-[color:rgba(44,53,97,0.18)] hover:text-[var(--brand-primary)]"
                   aria-label="Voice input"
                 >
                   <Mic className="h-4 w-4" />
@@ -586,7 +586,7 @@ export default function AIAgentChat({
                 </button>
               </div>
             </div>
-            <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-slate-400">
+            <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-[var(--brand-gray-light)]">
               <span>Press ↵ to send · ⇧↵ for a new line</span>
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full bg-[var(--brand-sky)]" />

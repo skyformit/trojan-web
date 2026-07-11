@@ -44,7 +44,7 @@ export default function PortalHeader({
                   title
                 )}
               </h1>
-              <p className="max-w-2xl text-[13px] text-slate-600 md:mt-1.5 md:text-[16px] leading-snug">
+              <p className="max-w-2xl text-[13px] text-[var(--brand-neutral)] md:mt-1.5 md:text-[16px] leading-snug">
                 {subtitle}
               </p>
             </div>
