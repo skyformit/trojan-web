@@ -292,7 +292,7 @@ export default function VerificationPanel({
         <div className="rounded-[18px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(244,248,255,0.98)_0%,rgba(236,243,253,0.98)_46%,rgba(249,250,255,0.99)_100%)] px-3 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:px-4 md:py-2.5">
           <p className="text-[11px] font-black uppercase tracking-[0.26em] text-[var(--brand-gray-light)]">Overall Decision</p>
 
-          <div className="mt-2 grid grid-cols-[minmax(80px,auto)_minmax(0,1fr)_auto] items-center gap-2 md:gap-2.5">
+          <div className="mt-2 grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(80px,auto)_minmax(0,1fr)_auto] sm:items-center md:gap-2.5">
             <div className="relative flex h-[80px] w-[80px] items-center justify-center rounded-full bg-[color:rgba(83,86,90,0.08)] shadow-[inset_0_0_0_1px_rgba(44,53,97,0.10)] md:h-[88px] md:w-[88px]">
               <div
                 className="absolute inset-0 rounded-full p-[4px] md:p-[5px]"
@@ -372,15 +372,15 @@ export default function VerificationPanel({
               <button
                 key={id}
                 onClick={() => setActiveTab(tab)}
-                className="flex items-center justify-between gap-3 rounded-[16px] border border-slate-200/90 bg-white px-4 py-3 text-left shadow-[0_6px_14px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 md:px-4 md:py-3.5"
+                className="flex items-start justify-between gap-3 rounded-[16px] border border-slate-200/90 bg-white px-4 py-3 text-left shadow-[0_6px_14px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 sm:items-center md:px-4 md:py-3.5"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-start gap-3 sm:items-center">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-[14px] ${getEffectiveDocStatus(doc) === 'verified' ? 'bg-[color:rgba(44,53,97,0.08)] text-[var(--brand-primary)]' : 'bg-slate-100 text-slate-500'} md:h-11 md:w-11`}>
                     <FileText className="h-[18px] w-[18px]" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[13px] font-bold text-slate-900 md:text-[14px]">{label}</p>
-                    <p className="mt-0.5 text-[9px] font-medium text-slate-400 md:text-[10px]">
+                    <p className="mt-0.5 text-[9px] font-medium text-slate-400 md:text-[10px] break-words">
                       {doc.extractedData
                         ? doc.type === 'bank_document'
                           ? `Bank Holder Name: ${getDocumentSummaryDetails(doc)}`
@@ -426,7 +426,7 @@ export default function VerificationPanel({
 
               {/* Infrastructure & Capabilities Survey Section */}
               <div id="registration-survey-form" className="rounded-[16px] border border-slate-200/80 bg-slate-50/80 p-3.5 space-y-3 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <div className="flex flex-col gap-2 border-b border-slate-200 pb-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-slate-800">Business Profile & Capacity</span>
                   <button
                     type="button"
@@ -772,7 +772,7 @@ export default function VerificationPanel({
   };
 
   return (
-    <div className="relative h-[600px] overflow-y-auto overflow-x-hidden rounded-[28px] border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_34px_rgba(15,23,42,0.07)] md:p-7">
+    <div className="relative h-[min(600px,calc(100dvh-14rem))] overflow-y-auto overflow-x-hidden rounded-[28px] border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_34px_rgba(15,23,42,0.07)] md:h-[600px] md:p-7">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(44,53,97,0.04)] md:h-[3px]" />
       {/* Title block */}
       <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">

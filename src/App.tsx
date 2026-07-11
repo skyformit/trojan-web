@@ -1634,7 +1634,7 @@ Next Step: ${friendlyNextStep}`
           100% { transform: translateX(320%); }
         }
       `}</style>
-      <main className="flex-1 w-full max-w-420 mx-auto p-4 md:p-6 space-y-6">
+      <main className="flex-1 w-full max-w-[1680px] mx-auto p-3 sm:p-4 md:p-6 space-y-6">
         <PortalHeader
           label="Live onboarding session"
           logo={
@@ -1715,7 +1715,7 @@ Next Step: ${friendlyNextStep}`
                 <strong className="font-bold">Helpful next step:</strong> {orchestratorFailure.suggestion}
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-600">
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 items-center">
+                <div className="grid grid-cols-1 gap-3 items-start sm:grid-cols-[110px_minmax(0,1fr)] sm:items-center">
                   <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400 leading-none">Reason</p>
                   <p className="text-sm font-medium text-slate-800 leading-snug">{orchestratorFailure.message}</p>
                 </div>

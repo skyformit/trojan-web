@@ -433,7 +433,7 @@ export default function AIAgentChat({
     return renderTextBlocks(normalizedText);
   };
   return (
-    <div className="relative flex h-[600px] flex-col overflow-hidden rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,255,0.98)_0%,rgba(245,248,255,0.96)_22%,rgba(241,246,255,0.92)_100%)] shadow-[0_20px_54px_rgba(15,23,42,0.10)]">
+    <div className="relative flex h-[min(600px,calc(100dvh-14rem))] flex-col overflow-hidden rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,255,0.98)_0%,rgba(245,248,255,0.96)_22%,rgba(241,246,255,0.92)_100%)] shadow-[0_20px_54px_rgba(15,23,42,0.10)] md:h-[600px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(44,53,97,0.04)] md:h-[3px]" />
       <div className="pointer-events-none absolute left-[-2px] top-[4.25rem] h-[calc(100%-7.5rem)] w-[3px] rounded-full bg-gradient-to-b from-[color:rgba(44,53,97,0.55)] via-[color:rgba(0,142,185,0.55)] to-transparent" />
       <div className="pointer-events-none absolute left-[-10px] top-[4.25rem] h-[calc(100%-7.5rem)] w-8 rounded-full bg-gradient-to-b from-[color:rgba(44,53,97,0.26)] via-[color:rgba(0,142,185,0.24)] to-transparent blur-3xl" />
@@ -536,7 +536,7 @@ export default function AIAgentChat({
       {!showContactSetup && (
       <div className="border-t border-[color:rgba(44,53,97,0.12)] bg-white/95 px-4 py-1.5 backdrop-blur">
           <div className="rounded-[22px] border border-[color:rgba(44,53,97,0.12)] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] px-3 py-[2px]">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
               <button
                 type="button"
                 onClick={() => {
@@ -565,7 +565,7 @@ export default function AIAgentChat({
                     ? 'Processing request...'
                     : 'Describe the supplier request to route it...'
               }
-              className="min-h-[38px] flex-1 rounded-full border border-transparent bg-transparent px-3 text-[13px] text-[var(--brand-primary-deep)] placeholder:text-[var(--brand-gray-light)] focus:outline-none"
+              className="min-h-[38px] min-w-0 flex-1 rounded-full border border-transparent bg-transparent px-3 text-[13px] text-[var(--brand-primary-deep)] placeholder:text-[var(--brand-gray-light)] focus:outline-none"
               disabled={isUploading || isRequestInProgress}
             />
               <div className="flex items-center gap-2 pr-1 text-[var(--brand-gray-light)]">
