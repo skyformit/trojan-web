@@ -1,1 +1,34 @@
 @import "tailwindcss";
+
+:root {
+  --brand-primary: #2c3561;
+  --brand-primary-mid: #334072;
+  --brand-primary-hover: #222b54;
+  --brand-primary-deep: #1a1a1a;
+  --brand-neutral: #53565a;
+  --brand-sky: #008eb9;
+  --brand-sky-light: #6db3d9;
+  --brand-sky-accent: #1da0cf;
+  --brand-gray-light: #b9babb;
+  --brand-beige: #d8cfbc;
+  --brand-brown: #b9835a;
+  --brand-bluegray: #8ba5b8;
+  --brand-success: #19b86b;
+  --brand-danger: #d63f4b;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%);
+  color: var(--brand-primary-deep);
+}
+
+::selection {
+  background: var(--brand-primary);
+  color: #ffffff;
+}

@@ -1,10 +1,46 @@
-export default function TrojanLogo() {
+type TrojanLogoProps = {
+  className?: string;
+  variant?: 'full' | 'icon';
+  ariaLabel?: string;
+};
+
+export default function TrojanLogo({
+  className = 'h-14 w-auto max-w-full',
+  variant = 'full',
+  ariaLabel = 'Trojan Construction Holding',
+}: TrojanLogoProps) {
+  if (variant === 'icon') {
+    return (
+      <svg
+        viewBox="0 0 180 180"
+        className={className}
+        role="img"
+        aria-label={ariaLabel}
+      >
+        <g transform="translate(10 18)">
+          <path
+            d="M62 0 L124 120 H0 Z"
+            fill="#1f2f47"
+          />
+          <circle cx="62" cy="54" r="10" fill="#ffffff" />
+          <path
+            d="M8 118 C29 102, 49 94, 62 94 C75 94, 95 100, 116 118"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="8"
+            strokeLinecap="round"
+          />
+        </g>
+      </svg>
+    );
+  }
+
   return (
     <svg
       viewBox="0 0 720 220"
-      className="h-14 w-auto max-w-full"
+      className={className}
       role="img"
-      aria-label="Trojan Construction Holding"
+      aria-label={ariaLabel}
     >
       <g transform="translate(42 26)">
         <path

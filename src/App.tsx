@@ -21,7 +21,9 @@ import { SupplierRegistrationState, ChatMessage, DocumentVerification } from './
 import AIAgentChat from './components/AIAgentChat';
 import VerificationPanel from './components/VerificationPanel';
 import { streamChatMessage } from './utils/chatStream';
-import TrojanLogo from './components/TrojanLogo';
+import PortalHeader from './components/PortalHeader';
+import PortalStepper, { type PortalStepperStep } from './components/PortalStepper';
+import PortalWorkspace from './components/PortalWorkspace';
 
 function getDisplayOcrName(extracted: Record<string, any>, documentType?: 'trade_license' | 'vat_certificate' | 'bank_document') {
   if (documentType === 'bank_document') {
@@ -558,7 +560,7 @@ function createWelcomeMessage(): ChatMessage {
   return {
     id: 'welcome',
     sender: 'agent',
-    text: `Hello and welcome to the Secure Supplier Portal! 🛡️\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! **What is the registered Commercial Name of your Enterprise?**`,
+    text: `Hello and welcome to the [[accent]]Secure Supplier Portal! 🛡️[[/accent]]\n\nI am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of three vital company certificates in real-time:\n\n1. **Valid Trade License**\n2. **VAT Registration Certificate**\n3. **Official Bank Document (Account ownership statement)**\n\nLet's begin! [[accent]]What is the registered Commercial Name of your Enterprise?[[/accent]]`,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
 }
@@ -925,6 +927,9 @@ export default function App() {
   const [showBackupContactPrompt, setShowBackupContactPrompt] = useState(false);
   const [backupContactAttempted, setBackupContactAttempted] = useState(false);
   const [backupContactErrors, setBackupContactErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const [sessionStartedAt] = useState(
+    () => `${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })} · GST`
+  );
   const orchestratorVendorId = String(
     orchestratorResponse?.vendID ??
     orchestratorResponse?.vendId ??
@@ -1594,270 +1599,94 @@ Next Step: ${friendlyNextStep}`
     return 'idle';
   };
 
-  const steps = [
+  const steps: PortalStepperStep[] = [
     {
       id: 1,
       label: 'Document Intake',
       desc: 'Document Collection',
-      icon: (active: boolean, done: boolean) => <Upload className="w-4 h-4" />
+      icon: () => <Upload className="w-4 h-4" />
     },
     {
       id: 2,
       label: 'Document Review',
       desc: 'Validation & Checks',
-      icon: (active: boolean, done: boolean) => <Building2 className="w-4 h-4" />
+      icon: () => <Building2 className="w-4 h-4" />
     },
     {
       id: 3,
       label: 'Compliance Review',
       desc: 'Decision Review',
-      icon: (active: boolean, done: boolean) => <ShieldCheck className="w-4 h-4" />
+      icon: () => <ShieldCheck className="w-4 h-4" />
     },
     {
       id: 4,
       label: 'Approved',
       desc: 'Ready for Onboarding',
-      icon: (active: boolean, done: boolean) => <CheckCircle2 className="w-4 h-4" />
+      icon: () => <CheckCircle2 className="w-4 h-4" />
     }
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 flex flex-col selection:bg-indigo-600 selection:text-white">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8f9fb_0%,#ffffff_100%)] font-sans text-[var(--brand-primary-deep)] flex flex-col selection:bg-[var(--brand-primary)] selection:text-white">
       <style>{`
         @keyframes tbms-submit-shimmer {
           0% { transform: translateX(-120%); }
           100% { transform: translateX(320%); }
         }
       `}</style>
-      {/* Dynamic Banner Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <TrojanLogo />
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleReset}
-              className="text-[10px] uppercase tracking-widest font-bold text-slate-400 hover:text-slate-600 transition"
-            >
-              Reset Portal
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Container Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+      <main className="flex-1 w-full max-w-420 mx-auto p-4 md:p-6 space-y-6">
+        <PortalHeader
+          label="Live onboarding session"
+          logo={
+            <img
+              src="/trojan-logo.jpeg"
+              alt="Trojan Construction Holding"
+              className="h-14 w-auto max-w-[150px] object-contain md:h-16 md:max-w-[180px]"
+            />
+          }
+          title="Secure Supplier Portal"
+          subtitle="Real-time OCR compliance validation, and enterprise-grade onboarding."
+          sessionId={String(orchestratorResponse?.context?.conversation_id || 'TRJ-08129-A45')}
+          startedAt={sessionStartedAt}
+        />
 
         {isSubmittingRegistration && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 px-4 py-4 shadow-sm">
+          <div className="rounded-xl border border-[color:rgba(44,53,97,0.18)] bg-[color:rgba(44,53,97,0.06)] px-4 py-4 shadow-sm">
             <div className="flex items-center justify-between gap-4 mb-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-indigo-500">Submission in progress</p>
+                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-[var(--brand-primary)]">Submission in progress</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">Sending registration request to TBMS...</p>
               </div>
-              <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest">Please wait</div>
+              <div className="text-[11px] font-bold text-[var(--brand-sky)] uppercase tracking-widest">Please wait</div>
             </div>
-            <div className="h-2 rounded-full bg-indigo-100 overflow-hidden relative">
-              <div className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-indigo-500"
+            <div className="h-2 rounded-full bg-[color:rgba(44,53,97,0.08)] overflow-hidden relative">
+              <div className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-primary)]"
                 style={{ animation: 'tbms-submit-shimmer 1.25s linear infinite' }}
               />
             </div>
           </div>
         )}
 
-        {/* Visual Registration Lifecycle Progress Bar */}
-        <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm">
-          <div className="relative flex items-center justify-between">
-            {/* Background Line & Active Fill */}
-            <div className="absolute top-5 left-[12.5%] right-[12.5%] h-[2px] bg-slate-100 -translate-y-1/2 z-0">
-              <div 
-                className={`h-full transition-all duration-500 ease-in-out ${
-                  overallAuditState === 'rejected'
-                    ? 'bg-rose-500'
-                    : overallAuditState === 'review'
-                      ? 'bg-amber-500'
-                      : overallAuditState === 'approved'
-                        ? 'bg-emerald-500'
-                        : 'bg-indigo-600'
-                }`}
-                style={{ 
-                  width: `${
-                    currentStepIndex === 1 ? '0%' : 
-                    currentStepIndex === 2 ? '33.33%' : 
-                    currentStepIndex === 3 ? '66.66%' : 
-                    '100%'
-                  }` 
-                }} 
-              />
-            </div>
-
-            {steps.map((step) => {
-              const stepState = getStepVisualState(step.id);
-              const isActive = stepState === 'in_progress';
-              const isCompleted = stepState === 'completed';
-              const isFailed = stepState === 'failed';
-              const isReview = stepState === 'review';
-
-              return (
-                <div key={step.id} className="relative z-10 flex flex-col items-center flex-1">
-                  <div 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-2 ${
-                      isFailed
-                        ? 'bg-rose-50 border-rose-500 text-rose-600 shadow-sm'
-                        : isCompleted 
-                          ? 'bg-emerald-50 border-emerald-500 text-emerald-600 shadow-sm' 
-                          : isReview
-                            ? 'bg-amber-50 border-amber-500 text-amber-600 shadow-sm'
-                            : isActive 
-                              ? 'bg-indigo-50 border-indigo-600 text-indigo-600 scale-105 shadow-md ring-4 ring-indigo-50' 
-                              : 'bg-white border-slate-200 text-slate-400'
-                    }`}
-                  >
-                    {isFailed ? (
-                      <XCircle className="w-5 h-5 text-rose-600" />
-                    ) : isReview ? (
-                      <AlertCircle className="w-5 h-5 text-amber-600" />
-                    ) : isCompleted ? (
-                      <Check className="w-5 h-5 text-emerald-600" />
-                    ) : (
-                      step.icon(isActive, isCompleted)
-                    )}
-                  </div>
-                  
-                  <div className="mt-3 text-center">
-                    <span className={`block text-[10px] font-bold uppercase tracking-wider ${
-                      isFailed
-                        ? 'text-rose-600'
-                        : isActive
-                          ? 'text-indigo-600'
-                          : isCompleted
-                            ? 'text-emerald-700'
-                            : isReview
-                              ? 'text-amber-700'
-                              : 'text-slate-400'
-                    }`}>
-                      {step.label}
-                    </span>
-                    <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
-                      isFailed
-                        ? 'text-rose-700 bg-rose-50 border-rose-200'
-                        : isReview
-                          ? 'text-amber-700 bg-amber-50 border-amber-200'
-                          : isCompleted
-                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                            : isActive
-                              ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
-                              : 'text-slate-400 bg-slate-50 border-slate-200'
-                    }`}>
-                      {isFailed
-                        ? 'Rejected'
-                        : isReview
-                          ? 'Needs Review'
-                          : isCompleted
-                            ? 'Approved'
-                            : isActive
-                              ? 'In Progress'
-                              : 'Pending'}
-                    </span>
-                    <span className="hidden sm:block text-[9px] text-slate-400 uppercase tracking-widest font-mono mt-1.5">
-                      {step.desc}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <PortalStepper
+          steps={steps}
+          currentStepIndex={currentStepIndex}
+          getStepVisualState={getStepVisualState}
+        />
         
-        {/* Dashboard split screen layout */}
-        {submissionComplete ? (
-          <div className="max-w-2xl mx-auto bg-white border border-slate-200 p-8 rounded-lg shadow-sm text-center space-y-6 animate-fade-in mt-6">
-            <div className="w-16 h-16 bg-green-50 border border-green-200 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Supplier Registration Successful!</h2>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
-                 Your enterprise registered for active procurement.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 p-5 rounded border border-slate-200 text-left font-mono text-xs text-slate-600 space-y-2">
-              <p><strong className="text-slate-900 font-sans uppercase text-[10px] tracking-wider block">Business Name:</strong> {registrationState.companyName || "Dynamic Tech Enterprises Corp"}</p>
-              {orchestratorResponse && (
-                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-left space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Submission Status</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
-                    <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Submitted</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">
-                        {String(orchestratorFinalStatus.submitted ? 'Yes' : 'No')}
-                      </p>
-                    </div>
-                    <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2">
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Approved</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">
-                        {String(orchestratorFinalStatus.approved ? 'Yes' : 'No')}
-                      </p>
-                    </div>
-                    {orchestratorVendorId ? (
-                      <div className="rounded-md bg-white/80 border border-indigo-100 px-3 py-2 sm:col-span-2">
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Registration Vendor ID</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{orchestratorVendorId}</p>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              )}
-              {registrationState.yearsInBusiness && (
-                <div className="border-t border-slate-200 pt-3 mt-3 font-sans text-slate-700 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Vendor Type</span><strong className="text-slate-800 text-xs">{registrationState.vendorType || 'N/A'}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Selected Product</span><strong className="text-slate-800 text-xs">{registrationState.surveyProduct || 'N/A'}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Years in Business</span><strong className="text-slate-800 text-xs">{registrationState.yearsInBusiness}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Total Staff</span><strong className="text-slate-800 text-xs">{registrationState.totalStaff}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Total Labors</span><strong className="text-slate-800 text-xs">{registrationState.totalLabors}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Engineers among Staff</span><strong className="text-slate-800 text-xs">{registrationState.totalEngineers}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Testing Facility Available</span><strong className="text-slate-800 text-xs">{registrationState.testingFacility}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Product Listing Coverage</span><strong className="text-slate-800 text-xs">{registrationState.clientConsultantListings} client(s)/consultant(s)</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Projects executed (last 3y)</span><strong className="text-slate-800 text-xs">{registrationState.projectsLast3Years}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Biggest Project (last 3y)</span><strong className="text-slate-800 text-xs">{registrationState.biggestProjectValue}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Annual Turnover</span><strong className="text-slate-800 text-xs">{registrationState.annualTurnover}</strong></div>
-                  <div><span className="text-slate-400 uppercase text-[9px] font-bold block">Factory Asset Value</span><strong className="text-slate-800 text-xs">{registrationState.factoryAssetValue}</strong></div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleReset}
-              className="mt-4 bg-slate-900 hover:bg-black text-white font-bold text-[10px] uppercase tracking-widest py-3 px-6 rounded-sm transition"
-            >
-              Onboard another supplier
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-6 xl:col-span-7">
-              <AIAgentChat
-                registrationState={registrationState}
-                setRegistrationState={setRegistrationState}
-                onAnalyzeDocument={handleAnalyzeDocument}
-                chatHistory={chatHistory}
-                setChatHistory={setChatHistory}
-              />
-            </div>
-            
-            <div className="lg:col-span-6 xl:col-span-5 text-slate-800">
-              <VerificationPanel
-                registrationState={registrationState}
-                setRegistrationState={setRegistrationState}
-                onSubmitRegistration={handleSubmitRegistration}
-                isSubmitting={isSubmittingRegistration}
-              />
-            </div>
-          </div>
-        )}
+        <PortalWorkspace
+          submissionComplete={submissionComplete}
+          registrationState={registrationState}
+          setRegistrationState={setRegistrationState}
+          chatHistory={chatHistory}
+          setChatHistory={setChatHistory}
+          onAnalyzeDocument={handleAnalyzeDocument}
+          onSubmitRegistration={handleSubmitRegistration}
+          onReset={handleReset}
+          isSubmittingRegistration={isSubmittingRegistration}
+          orchestratorResponse={orchestratorResponse}
+          orchestratorFinalStatus={orchestratorFinalStatus}
+          orchestratorVendorId={orchestratorVendorId}
+        />
       </main>
 
       {orchestratorFailure && !submissionComplete && (
@@ -1891,28 +1720,28 @@ Next Step: ${friendlyNextStep}`
                   <p className="text-sm font-medium text-slate-800 leading-snug">{orchestratorFailure.message}</p>
                 </div>
               </div>
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-[12px] text-indigo-700 leading-relaxed">
+              <div className="rounded-lg border border-[color:rgba(44,53,97,0.14)] bg-[color:rgba(44,53,97,0.06)] px-4 py-3 text-[12px] text-[var(--brand-primary)] leading-relaxed">
                 Please update the <strong className="font-semibold text-slate-900">email address</strong> below. This will update the record used for submission.
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <Globe className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                     <span>Email Address</span>
                   </label>
                   <input
                     type="email"
                     value={registrationState.contactEmail || ''}
                     onChange={(e) => setRegistrationState(prev => ({ ...prev, contactEmail: e.target.value }))}
-                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-[var(--brand-primary)]"
                     placeholder="Update the primary email address"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <Phone className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                     <span>Mobile Number</span>
                   </label>
                   <input
@@ -1923,21 +1752,21 @@ Next Step: ${friendlyNextStep}`
                       const digitsOnly = e.target.value.replace(/\D/g, '');
                       setRegistrationState(prev => ({ ...prev, phoneNumber: digitsOnly }));
                     }}
-                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-[var(--brand-primary)]"
                     placeholder="Update the primary mobile number"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <Mail className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                     <span>Trade License Number</span>
                   </label>
                   <input
                     type="text"
                     value={registrationState.tradeLicenseNumber || ''}
                     onChange={(e) => setRegistrationState(prev => ({ ...prev, tradeLicenseNumber: e.target.value }))}
-                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-indigo-500"
+                    className="w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border border-slate-200 focus:border-[var(--brand-primary)]"
                     placeholder="Optional: update the license number"
                   />
                 </div>
@@ -1976,7 +1805,7 @@ Next Step: ${friendlyNextStep}`
           <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 bg-white flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-indigo-500">Notification Contact Setup</p>
+                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-[var(--brand-primary)]">Notification Contact Setup</p>
                 <h3 className="mt-1 text-lg font-black text-slate-900">Please add one more contact person</h3>
                 <p className="mt-2 text-xs text-slate-500 leading-relaxed max-w-2xl">
                   For account verification, we need one more contact person and email address to reach out to you if your primary contact is unavailable.
@@ -2006,7 +1835,7 @@ Next Step: ${friendlyNextStep}`
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <Building className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                   <span>Full Name</span>
                 </label>
                 <input
@@ -2017,7 +1846,7 @@ Next Step: ${friendlyNextStep}`
                   className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
                     backupContactAttempted && backupContactErrors.name
                       ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-indigo-500'
+                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
                   }`}
                 />
                 {backupContactAttempted && backupContactErrors.name && (
@@ -2030,7 +1859,7 @@ Next Step: ${friendlyNextStep}`
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <Mail className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                   <span>Primary Notification Email</span>
                 </label>
                 <input
@@ -2041,7 +1870,7 @@ Next Step: ${friendlyNextStep}`
                   className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
                     backupContactAttempted && backupContactErrors.email
                       ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-indigo-500'
+                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
                   }`}
                 />
                 {backupContactAttempted && backupContactErrors.email && (
@@ -2054,7 +1883,7 @@ Next Step: ${friendlyNextStep}`
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <Phone className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
                   <span>UAE Mobile Phone Number</span>
                 </label>
                 <input
@@ -2069,7 +1898,7 @@ Next Step: ${friendlyNextStep}`
                   className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
                     backupContactAttempted && backupContactErrors.phone
                       ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-indigo-500'
+                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
                   }`}
                 />
                 {backupContactAttempted && backupContactErrors.phone && (
@@ -2118,7 +1947,7 @@ Next Step: ${friendlyNextStep}`
           <div className="bg-white border border-slate-200 rounded-lg w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-lg">
             <div className="bg-slate-50 p-6 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-indigo-600" />
+                <Database className="w-5 h-5 text-[var(--brand-primary)]" />
                 <div>
                   <h3 className="font-bold text-sm text-slate-900 uppercase tracking-tight">Central Registrar Database Indexes (Live Registry Simulation)</h3>
                   <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">Official business data used to authorize corporate registrations</p>
@@ -2138,10 +1967,12 @@ Next Step: ${friendlyNextStep}`
                   <div key={record.companyName} className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 shadow-sm">
                     <div className="flex items-start justify-between">
                       <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
-                        <Building className="w-3.5 h-3.5 text-indigo-600" /> {record.companyName}
+                        <Building className="w-3.5 h-3.5 text-[var(--brand-primary)]" /> {record.companyName}
                       </h4>
                       <span className={`text-[9px] px-2 py-0.5 rounded font-black tracking-wider uppercase ${
-                        record.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'
+                        record.status === 'ACTIVE'
+                          ? 'bg-[color:rgba(44,53,97,0.08)] text-[var(--brand-primary)]'
+                          : 'bg-slate-100 text-[var(--brand-primary-deep)]'
                       }`}>
                         {record.status}
                       </span>
@@ -2154,7 +1985,7 @@ Next Step: ${friendlyNextStep}`
                       </div>
                       <div>
                         <span className="block text-[8px] font-bold uppercase text-slate-400">License Expiry:</span>
-                        <span className={`font-semibold ${record.status === 'EXPIRED' ? 'text-rose-600 font-bold' : 'text-slate-800'}`}>{record.licenseExpiry}</span>
+                        <span className={`font-semibold ${record.status === 'EXPIRED' ? 'text-[var(--brand-primary-deep)] font-bold' : 'text-slate-800'}`}>{record.licenseExpiry}</span>
                       </div>
                       <div>
                         <span className="block text-[8px] font-bold uppercase text-slate-400">VAT Registration:</span>
@@ -2181,17 +2012,6 @@ Next Step: ${friendlyNextStep}`
           </div>
         </div>
       )}
-
-      {/* Humble Footer */}
-      <footer className="bg-white border-t border-slate-200 h-16 flex items-center">
-        <div className="max-w-7xl mx-auto px-6 w-full flex flex-col sm:flex-row items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest gap-2">
-          
-          <div className="flex items-center gap-4">
-            <span>Copyright reserved to Trojan General Contracting</span>
-            <span className="text-indigo-600">v2.4.1</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

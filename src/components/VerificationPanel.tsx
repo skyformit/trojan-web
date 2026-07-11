@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldCheck, FileText, CheckSquare, Clock, Globe, ArrowRight, Save, Database, UserCheck } from 'lucide-react';
+import { ShieldCheck, FileText, Clock, ArrowRight, Save, Database, UserCheck } from 'lucide-react';
 import { SupplierRegistrationState, DocumentVerification } from '../types';
+import KeyValueTable from './ui/KeyValueTable';
+import StatusPill from './ui/StatusPill';
 
 interface VerificationPanelProps {
   registrationState: SupplierRegistrationState;
@@ -158,18 +160,18 @@ export default function VerificationPanel({
   const renderAcceptanceBadge = (doc: DocumentVerification) => {
     const normalized = getAcceptanceDisplayStatus(doc);
     if (normalized === 'approved') {
-      return <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Approved</span>;
+      return <StatusPill tone="success">Approved</StatusPill>;
     }
     if (normalized === 'review') {
-      return <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Review</span>;
+      return <StatusPill tone="warning">Review</StatusPill>;
     }
     if (normalized === 'expired') {
-      return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Expired</span>;
+      return <StatusPill tone="danger">Expired</StatusPill>;
     }
     if (normalized === 'rejected') {
-      return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Rejected</span>;
+      return <StatusPill tone="danger">Rejected</StatusPill>;
     }
-    return <span className="text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Unknown</span>;
+    return <StatusPill tone="neutral">Unknown</StatusPill>;
   };
 
   const getDocumentSummaryDetails = (doc: DocumentVerification) => {
@@ -207,21 +209,21 @@ export default function VerificationPanel({
   const getDocStatusBadge = (doc: DocumentVerification) => {
     switch (getEffectiveDocStatus(doc)) {
       case 'empty':
-        return <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Missing</span>;
+        return <StatusPill tone="neutral">Missing</StatusPill>;
       case 'verifying':
-        return <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Scanning...</span>;
+        return <StatusPill tone="info" className="animate-pulse">Scanning...</StatusPill>;
       case 'ocr_completed':
-        return <span className="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider">OCR Extracted</span>;
+        return <StatusPill tone="info">OCR Extracted</StatusPill>;
       case 'registry_check':
-        return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Checking...</span>;
+        return <StatusPill tone="warning" className="animate-pulse">Checking...</StatusPill>;
       case 'review':
-        return <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">Review</span>;
+        return <StatusPill tone="warning">Review</StatusPill>;
       case 'expired':
-        return <span className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">Expired</span>;
+        return <StatusPill tone="danger">Expired</StatusPill>;
       case 'verified':
-        return <span className="text-[10px] text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">✓ Verified</span>;
+        return <StatusPill tone="success">✓ Verified</StatusPill>;
       case 'failed':
-        return <span className="text-[10px] text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1">✕ Failed</span>;
+        return <StatusPill tone="danger">✕ Failed</StatusPill>;
     }
   };
 
@@ -235,83 +237,150 @@ export default function VerificationPanel({
 
   const score = getOverallProgress();
 
-  const renderStatusDashboard = () => {
-    return (
-      <div className="space-y-6">
-        {/* Core summary card */}
-        <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Overall Decision</p>
-              <h3 className="text-2xl font-black text-slate-900 font-sans mt-1">{score}% Validated</h3>
-            </div>
-            <div className={`p-3 rounded border ${score === 100 ? 'bg-green-100 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-500'}`}>
-              <ShieldCheck className="w-7 h-7" />
-            </div>
-          </div>
+  const buildDocumentSummaryRows = (doc: DocumentVerification) => {
+    const displayStatus = getAcceptanceDisplayStatus(doc);
+    const acceptanceStatus = String(doc.documentAcceptance?.status || '').toLowerCase();
+    const notesLabel = displayStatus === 'rejected'
+      ? 'Rejection Notes'
+      : displayStatus === 'expired'
+        ? 'Expiration Notes'
+        : acceptanceStatus === 'review'
+          ? 'Review Notes'
+          : 'Approval Notes';
+    const notes = Array.isArray(doc.documentAcceptance?.reasons)
+      ? doc.documentAcceptance.reasons.map(reason => formatAcceptanceReasonText(String(reason)))
+      : [];
 
-          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-2">
-            <div 
-              className={`h-full transition-all duration-700 ${score === 100 ? 'bg-emerald-500' : 'bg-indigo-600'}`}
-              style={{ width: `${score}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-            <span>Pending Setup</span>
-            <span>Compliance Match</span>
+    return [
+      { label: 'Document Type', value: formatAcceptanceValue(doc.documentAcceptance?.document_type) },
+      { label: 'Final Decision', value: formatAcceptanceValue(displayStatus || doc.documentAcceptance?.status) },
+      { label: 'Decision Score', value: formatAcceptanceValue(doc.documentAcceptance?.score) },
+      { label: 'Missing Fields', value: formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance?.missing_fields)) },
+      {
+        label: notesLabel,
+        value: notes.length > 0 ? (
+          <ul className="space-y-1 list-disc list-inside">
+            {notes.map((reason, index) => (
+              <li key={`${notesLabel}-${index}`}>{reason}</li>
+            ))}
+          </ul>
+        ) : 'N/A',
+      },
+      { label: 'Expiry Date', value: formatAcceptanceValue(doc.documentAcceptance?.expiry_date) },
+      { label: 'Expired', value: formatAcceptanceValue(doc.documentAcceptance?.is_expired) },
+      { label: 'Ready for Approval', value: formatAcceptanceValue(doc.documentAcceptance?.acceptable) },
+    ];
+  };
+
+  const getExtractedValue = (doc: DocumentVerification, key: string) => {
+    const extractedData = doc.extractedData || {};
+    if (key === 'vatNumber') {
+      return extractedData.vatNumber || extractedData.taxRegistrationNumber || 'N/A';
+    }
+    return extractedData[key] || 'N/A';
+  };
+
+  const renderStatusDashboard = () => {
+    const scoreProgress = Math.max(0, Math.min(score, 100));
+    const scoreRingStyle = {
+      background: `conic-gradient(#4f46e5 0deg ${scoreProgress * 3.6}deg, #dbe5f3 ${scoreProgress * 3.6}deg 360deg)`,
+    } as React.CSSProperties;
+
+    return (
+      <div className="space-y-2.5">
+        {/* Core summary card */}
+        <div className="rounded-[18px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(244,248,255,0.98)_0%,rgba(236,243,253,0.98)_46%,rgba(249,250,255,0.99)_100%)] px-3 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:px-4 md:py-2.5">
+          <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">Overall Decision</p>
+
+          <div className="mt-2 grid grid-cols-[minmax(80px,auto)_minmax(0,1fr)_auto] items-center gap-2 md:gap-2.5">
+            <div className="relative flex h-[80px] w-[80px] items-center justify-center rounded-full bg-slate-100/80 shadow-[inset_0_0_0_1px_rgba(226,232,240,1)] md:h-[88px] md:w-[88px]">
+              <div
+                className="absolute inset-0 rounded-full p-[4px] md:p-[5px]"
+                style={scoreRingStyle}
+              >
+                <div className="h-full w-full rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,255,0.98)_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)]" />
+              </div>
+              <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                <span className="text-[22px] font-black leading-none tracking-tight text-[var(--brand-primary)] md:text-[26px]">{score}%</span>
+                <span className="mt-0.5 text-[6px] font-black uppercase tracking-[0.2em] text-slate-500 md:text-[7px]">Validated</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-center gap-0.5 pl-0 text-[12px] font-medium text-slate-600 md:text-[13px]">
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span>Identity</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span>Documents</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-400/90" />
+                <span>Compliance</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">Pending</p>
+              <p className="mt-1 text-[16px] font-black leading-none text-slate-950 md:text-[20px]">0 / 3</p>
+              <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-slate-500">Awaiting</p>
+            </div>
           </div>
         </div>
 
         {/* Contact & Notification Settings Status */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm space-y-3">
-          <h4 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-            <UserCheck className="w-3.5 h-3.5 text-indigo-500" /> Authorized Representative
+        <div className="rounded-[18px] border border-[color:rgba(44,53,97,0.14)] bg-[linear-gradient(180deg,rgba(243,245,250,0.98)_0%,rgba(239,241,246,0.95)_100%)] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.05)] space-y-2.5">
+          <h4 className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.28em] text-[var(--brand-primary)]">
+            <UserCheck className="h-3.5 w-3.5 text-[var(--brand-sky)]" /> Authorized Representative
           </h4>
           
           {registrationState.contactName ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-100 overflow-hidden">
-                <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">Full Name</span>
-                <span className="font-bold text-slate-800 truncate block mt-0.5">{registrationState.contactName}</span>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Full Name</span>
+                <span className="mt-1 block truncate text-[13px] font-black text-slate-900">{registrationState.contactName}</span>
               </div>
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-100 overflow-hidden">
-                <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">Notification Email</span>
-                <span className="font-semibold text-indigo-600 truncate block mt-0.5" title={registrationState.contactEmail}>{registrationState.contactEmail || 'N/A'}</span>
+              <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Notification Email</span>
+                <span className="mt-1 block truncate text-[13px] font-black text-[var(--brand-primary)]" title={registrationState.contactEmail}>{registrationState.contactEmail || 'N/A'}</span>
               </div>
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-100 overflow-hidden">
-                <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">Mobile/SMS Contact</span>
-                <span className="font-mono font-medium text-slate-700 truncate block mt-0.5">{registrationState.phoneNumber || 'N/A'}</span>
+              <div className="rounded-[14px] border border-white/80 bg-white/75 px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.24em] text-slate-400">Mobile/SMS Contact</span>
+                <span className="mt-1 block truncate font-mono text-[13px] font-medium text-slate-800">{registrationState.phoneNumber || 'N/A'}</span>
               </div>
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400 italic">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
+            <p className="rounded-[14px] border border-[color:rgba(44,53,97,0.1)] bg-white/70 px-3 py-2.5 text-[10px] italic text-slate-500 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
           )}
         </div>
 
         {/* Compliance Checklist status breakdown */}
-        <div className="space-y-3">
-          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Database className="w-3.5 h-3.5 text-slate-400" /> Required Identification Badges
-          </h4>
-          
-          <div className="grid grid-cols-1 gap-2">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2.5">
+            <h4 className="flex items-center gap-1.5 text-[8px] font-extrabold uppercase tracking-[0.28em] text-slate-500">
+              <Database className="h-3.5 w-3.5 text-slate-400" /> Required Identification Badges
+            </h4>
+            <span className="text-[8px] font-black uppercase tracking-[0.22em] text-[var(--brand-primary)]">{[trade_license, vat_certificate, bank_document].filter(doc => getEffectiveDocStatus(doc) === 'verified').length} / 3</span>
+          </div>
+          <div className="grid grid-cols-1 gap-1.5">
             {([
               { doc: trade_license, tab: 'trade', label: 'Commercial Trade License', key: 'trade_license', id: 'TL' },
               { doc: vat_certificate, tab: 'vat', label: 'VAT Registration Ledger', key: 'vat_certificate', id: 'VAT' },
-              { doc: bank_document, tab: 'bank_document', label: 'Authorized Bank Document', key: 'bank_document', id: 'BANK' }
+              { doc: bank_document, tab: 'bank_document', label: 'Bank Account Statement', key: 'bank_document', id: 'BANK' }
             ] as const).map(({ doc, tab, label, id }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(tab)}
-                className="flex items-center justify-between text-left p-4 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg shadow-sm transition"
+                className="flex items-center justify-between gap-3 rounded-[16px] border border-slate-200/90 bg-white px-4 py-3 text-left shadow-[0_6px_14px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 md:px-4 md:py-3.5"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded ${getEffectiveDocStatus(doc) === 'verified' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                    <FileText className="w-4 h-4" />
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-[14px] ${getEffectiveDocStatus(doc) === 'verified' ? 'bg-[color:rgba(44,53,97,0.08)] text-[var(--brand-primary)]' : 'bg-slate-100 text-slate-500'} md:h-11 md:w-11`}>
+                    <FileText className="h-[18px] w-[18px]" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">{label}</p>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    <p className="text-[13px] font-bold text-slate-900 md:text-[14px]">{label}</p>
+                    <p className="mt-0.5 text-[9px] font-medium text-slate-400 md:text-[10px]">
                       {doc.extractedData
                         ? doc.type === 'bank_document'
                           ? `Bank Holder Name: ${getDocumentSummaryDetails(doc)}`
@@ -321,17 +390,17 @@ export default function VerificationPanel({
                         : 'Not provided yet'}
                     </p>
                     {doc.type === 'trade_license' && doc.extractedData?.tradeName && (
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <p className="mt-0.5 text-[9px] text-slate-500 md:text-[10px]">
                         Trade Name: {doc.extractedData.tradeName}
                       </p>
                     )}
                     {doc.documentAcceptance?.status && (
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      <p className="mt-0.5 text-[9px] text-slate-500 md:text-[10px]">
                         Acceptance: {doc.documentAcceptance.is_expired ? 'expired' : doc.documentAcceptance.status}
                       </p>
                     )}
                     {doc.processingTime && (
-                      <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider mt-0.5">
+                      <p className="mt-0.5 text-[8px] font-extrabold uppercase tracking-[0.2em] text-[var(--brand-sky)]">
                         Processing time: {doc.processingTime}
                       </p>
                     )}
@@ -344,21 +413,21 @@ export default function VerificationPanel({
         </div>
 
         {/* Registry compliance statement & action trigger */}
-        <div className="pt-4 border-t border-slate-200">
+        <div className="pt-3 border-t border-slate-200">
           {score === 100 ? (
-            <div className="space-y-5">
-              <div className="p-4 bg-green-50 border border-green-150 rounded-lg text-xs text-green-800 leading-relaxed font-sans shadow-xs">
-                <div className="flex items-center gap-2 mb-1.5 font-bold text-green-700 uppercase tracking-wider text-[10px]">
-                  <UserCheck className="w-4 h-4 text-green-600" />
+            <div className="space-y-3.5">
+              <div className="rounded-[14px] border border-[color:rgba(44,53,97,0.14)] bg-[color:rgba(44,53,97,0.06)] p-3 text-[10px] font-sans leading-relaxed text-[var(--brand-primary)] shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
+                <div className="mb-1 flex items-center gap-1.5 font-bold text-[var(--brand-primary)] uppercase tracking-wider text-[8px]">
+                  <UserCheck className="w-3.5 h-3.5 text-[var(--brand-sky)]" />
                   <span>Onboarding Credentials Approved</span>
                 </div>
                 AI Agent validation confirms that all document IDs are globally validated. Under Trojan General Contracting onboarding protocol, please complete the commercial and operational survey below to publish your submission.
               </div>
 
               {/* Infrastructure & Capabilities Survey Section */}
-              <div id="registration-survey-form" className="bg-slate-50 border border-slate-200 rounded-lg p-5 space-y-4">
+              <div id="registration-survey-form" className="rounded-[16px] border border-slate-200/80 bg-slate-50/80 p-3.5 space-y-3 shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <span className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Business Profile & Capacity</span>
+                  <span className="text-[9px] font-extrabold uppercase tracking-[0.24em] text-slate-800">Business Profile & Capacity</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -378,20 +447,20 @@ export default function VerificationPanel({
                         factoryAssetValue: '10m to 50m'
                       }));
                     }}
-                    className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest hover:text-indigo-800 transition-colors pointer-events-auto cursor-pointer"
+                    className="text-[8px] text-[var(--brand-primary)] font-bold uppercase tracking-widest hover:text-[var(--brand-sky)] transition-colors pointer-events-auto cursor-pointer"
                   >
                     ⚡ Fast Prefill Answers
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                   <div>
                     <label htmlFor="survey-vendor-type" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Vendor type</label>
                     <select
                       id="survey-vendor-type"
                       value={registrationState.vendorType || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, vendorType: e.target.value as 'Supplier' | 'Others' | 'Government services' | '' }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="Supplier">Supplier</option>
@@ -406,7 +475,7 @@ export default function VerificationPanel({
                       id="survey-product"
                       value={registrationState.surveyProduct || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, surveyProduct: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       {productOptions.map((product) => (
@@ -421,7 +490,7 @@ export default function VerificationPanel({
                       id="survey-years-in-business"
                       value={registrationState.yearsInBusiness || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, yearsInBusiness: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 5">0 to 5</option>
@@ -436,7 +505,7 @@ export default function VerificationPanel({
                       id="survey-total-staff"
                       value={registrationState.totalStaff || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, totalStaff: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 50">0 to 50</option>
@@ -451,7 +520,7 @@ export default function VerificationPanel({
                       id="survey-total-labors"
                       value={registrationState.totalLabors || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, totalLabors: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 50">0 to 50</option>
@@ -466,7 +535,7 @@ export default function VerificationPanel({
                       id="survey-total-engineers"
                       value={registrationState.totalEngineers || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, totalEngineers: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 50">0 to 50</option>
@@ -481,7 +550,7 @@ export default function VerificationPanel({
                       id="survey-testing-facility"
                       value={registrationState.testingFacility || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, testingFacility: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="Yes">Yes</option>
@@ -495,7 +564,7 @@ export default function VerificationPanel({
                       id="survey-client-listings"
                       value={registrationState.clientConsultantListings || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, clientConsultantListings: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 5">0 to 5</option>
@@ -510,7 +579,7 @@ export default function VerificationPanel({
                       id="survey-projects-3yr"
                       value={registrationState.projectsLast3Years || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, projectsLast3Years: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 10">0 to 10</option>
@@ -525,7 +594,7 @@ export default function VerificationPanel({
                       id="survey-biggest-project"
                       value={registrationState.biggestProjectValue || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, biggestProjectValue: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 100k">0 to 100k</option>
@@ -540,7 +609,7 @@ export default function VerificationPanel({
                       id="survey-annual-turnover"
                       value={registrationState.annualTurnover || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, annualTurnover: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 10m">0 to 10m</option>
@@ -555,7 +624,7 @@ export default function VerificationPanel({
                       id="survey-factory-asset"
                       value={registrationState.factoryAssetValue || ''}
                       onChange={(e) => setRegistrationState(prev => ({ ...prev, factoryAssetValue: e.target.value }))}
-                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full bg-white border border-slate-200 rounded p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
                     >
                       <option value="">Select option...</option>
                       <option value="0 to 10m">0 to 10m</option>
@@ -612,12 +681,16 @@ export default function VerificationPanel({
               </button>
             </div>
           ) : (
-            <div className="p-5 bg-slate-50 rounded border border-slate-200 text-slate-500 text-xs text-center space-y-1">
-              <Clock className="w-5 h-5 mx-auto mb-2 text-slate-400" />
-              <p className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">File Incomplete or Flagged</p>
-              <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                Provide or align all 3 required documents. Once the score reaches 100%, you can submit the official application.
-              </p>
+            <div className="rounded-[16px] border border-amber-200 bg-[linear-gradient(180deg,rgba(255,248,235,0.98)_0%,rgba(255,244,217,0.92)_100%)] px-3 py-2 text-left shadow-[0_6px_14px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white/80 text-amber-500">
+                  <Clock className="h-3.5 w-3.5" />
+                </div>
+                <p className="text-[11px] font-semibold leading-relaxed text-slate-600">
+
+                  Upload or align all 3 required documents. Once the score reaches 100%, you can submit the official application.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -653,76 +726,34 @@ export default function VerificationPanel({
                   <div key={def.key} className="border-b border-slate-200 pb-1.5">
                     <span className="block text-[9px] uppercase font-bold text-slate-400">{def.label}:</span>
                     <span className="text-xs font-bold text-slate-800 font-mono">
-                      {doc.extractedData?.[def.key] || (def.key === 'vatNumber' ? doc.extractedData?.taxRegistrationNumber : '') || 'N/A'}
+                      {getExtractedValue(doc, def.key)}
                     </span>
                   </div>
                 ))}
               </div>
 
               {doc.processingTime && (
-                <div className="mt-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded border border-indigo-200 bg-indigo-50 text-indigo-700">
+                <div className="mt-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded border border-[color:rgba(44,53,97,0.18)] bg-[color:rgba(44,53,97,0.06)] text-[var(--brand-primary)]">
                   Processing Time: {doc.processingTime}
                 </div>
               )}
             </div>
 
             {doc.documentAcceptance && (
-              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
-                <div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div>
                     <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Verification Summary</p>
                     <h5 className="text-sm font-bold text-slate-900 mt-0.5">Decision Summary</h5>
                   </div>
                   {renderAcceptanceBadge(doc)}
                 </div>
 
-                <div className="grid grid-cols-2 bg-slate-50 text-[10px] uppercase tracking-widest text-slate-500 font-bold border-b border-slate-200">
-                  <div className="px-3 py-2 border-r border-slate-200">Item</div>
-                  <div className="px-3 py-2">Details</div>
-                </div>
-
-                {(() => {
-                  const acceptanceStatus = String(doc.documentAcceptance.status || '').toLowerCase();
-                  const displayStatus = getAcceptanceDisplayStatus(doc);
-                  const notesLabel = displayStatus === 'rejected'
-                    ? 'Rejection Notes'
-                    : displayStatus === 'expired'
-                      ? 'Expiration Notes'
-                      : acceptanceStatus === 'review'
-                      ? 'Review Notes'
-                      : 'Approval Notes';
-                  const notes = Array.isArray(doc.documentAcceptance.reasons)
-                    ? doc.documentAcceptance.reasons.map(reason => formatAcceptanceReasonText(String(reason)))
-                    : [];
-
-                  return [
-                    ['Document Type', formatAcceptanceValue(doc.documentAcceptance.document_type)],
-                    ['Final Decision', formatAcceptanceValue(displayStatus || doc.documentAcceptance.status)],
-                    ['Decision Score', formatAcceptanceValue(doc.documentAcceptance.score)],
-                    ['Missing Fields', formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance.missing_fields))],
-                    [notesLabel, notes],
-                    ['Expiry Date', formatAcceptanceValue(doc.documentAcceptance.expiry_date)],
-                    ['Expired', formatAcceptanceValue(doc.documentAcceptance.is_expired)],
-                    ['Ready for Approval', formatAcceptanceValue(doc.documentAcceptance.acceptable)],
-                  ] as Array<[string, unknown]>;
-                })().map(([label, value]) => (
-                  <div key={label} className="grid grid-cols-2 text-xs border-b border-slate-100 last:border-b-0">
-                    <div className="px-3 py-2 font-semibold text-slate-600 bg-slate-50 border-r border-slate-100">
-                      {label}
-                    </div>
-                    <div className="px-3 py-2 text-slate-800 break-words">
-                      {Array.isArray(value) ? (
-                        <ul className="space-y-1 list-disc list-inside">
-                          {value.map((reason, index) => (
-                            <li key={`${label}-${index}`}>{reason}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        value
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <KeyValueTable
+                  headerLeft="Item"
+                  headerRight="Details"
+                  rows={buildDocumentSummaryRows(doc)}
+                />
               </div>
             )}
 
@@ -741,43 +772,49 @@ export default function VerificationPanel({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-6 text-slate-800 h-[600px] overflow-y-auto shadow-sm">
+    <div className="relative h-[600px] overflow-y-auto overflow-x-hidden rounded-[28px] border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_34px_rgba(15,23,42,0.07)] md:p-7">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(44,53,97,0.04)] md:h-[3px]" />
       {/* Title block */}
-      <div className="mb-4">
-        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900">Real-Time Registration Auditor</h3>
-        <p className="text-xs text-slate-400 mt-0.5">Document review and verification</p>
+      <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.32em] text-slate-400">Real-Time Registration Auditor</p>
+          <h3 className="mt-1 text-[17px] font-bold text-[var(--brand-primary)]">Document review and verification</h3>
+        </div>
+        <div className="rounded-[14px] border border-[color:rgba(44,53,97,0.14)] bg-[color:rgba(44,53,97,0.06)] p-2.5 text-[var(--brand-sky)] shadow-[0_8px_16px_rgba(15,23,42,0.04)]">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
       </div>
 
       {/* Tabs list */}
-      <div className="flex border-b border-slate-200 mb-5 text-xs text-slate-400 gap-1 overflow-x-auto">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-slate-200 text-xs text-slate-400">
         <button
           onClick={() => setActiveTab('status')}
-          className={`pb-2 px-3 font-bold uppercase tracking-wider transition ${
-            activeTab === 'status' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'hover:text-slate-800'
+          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+            activeTab === 'status' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
           Scoreboard
         </button>
         <button
           onClick={() => setActiveTab('trade')}
-          className={`pb-2 px-3 font-bold uppercase tracking-wider transition ${
-            activeTab === 'trade' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'hover:text-slate-800'
+          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+            activeTab === 'trade' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
           License
         </button>
         <button
           onClick={() => setActiveTab('vat')}
-          className={`pb-2 px-3 font-bold uppercase tracking-wider transition ${
-            activeTab === 'vat' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'hover:text-slate-800'
+          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+            activeTab === 'vat' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
           VAT
         </button>
         <button
           onClick={() => setActiveTab('bank_document')}
-          className={`pb-2 px-3 font-bold uppercase tracking-wider transition ${
-            activeTab === 'bank_document' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'hover:text-slate-800'
+          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+            activeTab === 'bank_document' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
           Bank Doc
