@@ -15,7 +15,7 @@ export default function VendorLookupResults({ summaries, getBadgeLabel }: Vendor
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--brand-primary)]">Vendor Lookup Result</p>
-          <h3 className="text-sm font-bold text-slate-900 mt-1">
+          <h3 className="text-sm font-bold text-[var(--brand-primary-deep)] mt-1">
             {summaries[0]?.companyName || 'Vendor Matches'}
           </h3>
         </div>
@@ -30,12 +30,12 @@ export default function VendorLookupResults({ summaries, getBadgeLabel }: Vendor
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--brand-primary)]">Vendor {index + 1}</p>
-                <h4 className="text-sm font-bold text-slate-900 mt-1">{vendor.companyName}</h4>
+                <h4 className="text-sm font-bold text-[var(--brand-primary-deep)] mt-1">{vendor.companyName}</h4>
               </div>
               <span
                 className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
                   vendor.lifecycleStatus === 'expired'
-                    ? 'text-[var(--brand-primary-deep)] bg-slate-100 border-slate-200'
+                    ? 'text-[var(--brand-primary-deep)] bg-[color:rgba(44,53,97,0.05)] border-[color:rgba(44,53,97,0.12)]'
                     : vendor.lifecycleStatus === 'renewal_due'
                       ? 'text-[var(--brand-brown)] bg-[color:rgba(185,131,90,0.12)] border-[color:rgba(185,131,90,0.18)]'
                       : 'text-[var(--brand-primary)] bg-[color:rgba(44,53,97,0.08)] border-[color:rgba(44,53,97,0.14)]'
@@ -45,36 +45,36 @@ export default function VendorLookupResults({ summaries, getBadgeLabel }: Vendor
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Trade License No.</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[var(--brand-neutral)]">
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Trade License No.</span>
                 <span className="font-mono font-semibold">{vendor.tradeLicenseNo}</span>
               </div>
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Expiry Date</span>
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Expiry Date</span>
                 <span className="font-semibold">{vendor.expDate}</span>
               </div>
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5 sm:col-span-2">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Business Activity</span>
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5 sm:col-span-2">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Business Activity</span>
                 <span>{vendor.businessActivity}</span>
               </div>
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5 sm:col-span-2">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Address</span>
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5 sm:col-span-2">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Address</span>
                 <span>{vendor.address}</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Phone</span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-[var(--brand-neutral)]">
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Phone</span>
                 <span>{vendor.phone}</span>
               </div>
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Email</span>
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Email</span>
                 <span className="break-all">{vendor.email}</span>
               </div>
-              <div className="bg-slate-50 rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Chamber No.</span>
+              <div className="bg-[color:rgba(44,53,97,0.04)] rounded border border-[color:rgba(44,53,97,0.12)] p-2.5">
+                <span className="block text-[9px] uppercase tracking-wider text-[var(--brand-gray-light)] font-bold">Chamber No.</span>
                 <span>{vendor.chamberNo}</span>
               </div>
             </div>

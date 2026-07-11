@@ -31,7 +31,7 @@ export default function ContactSetupCard({
   onSave,
 }: ContactSetupCardProps) {
   return (
-    <div className="bg-white border hover:border-[color:rgba(44,53,97,0.24)] border-[color:rgba(44,53,97,0.14)] rounded-lg p-5 shadow-sm space-y-3.5 max-w-[90%] mx-auto font-sans text-slate-800 animate-fade-in">
+    <div className="bg-white border hover:border-[color:rgba(44,53,97,0.24)] border-[color:rgba(44,53,97,0.14)] rounded-lg p-5 shadow-sm space-y-3.5 max-w-[90%] mx-auto font-sans text-[var(--brand-primary-deep)] animate-fade-in">
       <div className="flex items-center gap-2 text-[var(--brand-primary)] font-bold text-xs uppercase tracking-wider border-b border-[color:rgba(44,53,97,0.08)] pb-2">
         <Sparkles className="w-4 h-4 text-[var(--brand-sky)] animate-pulse" />
         <span>Notification Contact Setup</span>
@@ -46,7 +46,7 @@ export default function ContactSetupCard({
 
       <div className="space-y-3.5 text-xs">
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+          <label className="block text-[10px] font-bold text-[var(--brand-gray-light)] uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <UserCheck className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
             <span>Full Name</span>
           </label>
@@ -55,10 +55,10 @@ export default function ContactSetupCard({
             placeholder="e.g. John Doe"
             value={contactName}
             onChange={(e) => onContactNameChange(e.target.value)}
-            className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
+            className={`w-full bg-[color:rgba(44,53,97,0.04)] focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
               attempted && errors.name
                 ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                : 'border-slate-200 focus:border-[var(--brand-primary)]'
+                : 'border-[color:rgba(44,53,97,0.12)] focus:border-[var(--brand-primary)]'
             }`}
           />
           {attempted && errors.name && (
@@ -70,7 +70,7 @@ export default function ContactSetupCard({
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+          <label className="block text-[10px] font-bold text-[var(--brand-gray-light)] uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <Mail className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
             <span>Primary Notification Email</span>
           </label>
@@ -79,10 +79,10 @@ export default function ContactSetupCard({
             placeholder="john.doe@company.com"
             value={contactEmail}
             onChange={(e) => onContactEmailChange(e.target.value)}
-            className={`w-full bg-slate-50 focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
+            className={`w-full bg-[color:rgba(44,53,97,0.04)] focus:bg-white rounded px-3 py-2 focus:outline-none transition font-medium border ${
               attempted && errors.email
                 ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                : 'border-slate-200 focus:border-[var(--brand-primary)]'
+                : 'border-[color:rgba(44,53,97,0.12)] focus:border-[var(--brand-primary)]'
             }`}
           />
           {attempted && errors.email && (
@@ -94,22 +94,22 @@ export default function ContactSetupCard({
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+          <label className="block text-[10px] font-bold text-[var(--brand-gray-light)] uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
             <Phone className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
             <span>UAE Mobile Phone Number</span>
           </label>
           <div className={`flex items-stretch rounded border overflow-hidden ${
             attempted && errors.phone
               ? 'border-rose-300 bg-rose-50'
-              : 'border-slate-200 bg-slate-50 focus-within:border-[var(--brand-primary)] focus-within:bg-white'
+              : 'border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(44,53,97,0.04)] focus-within:border-[var(--brand-primary)] focus-within:bg-white'
           }`}>
-            <div className="flex items-center px-3 text-sm font-bold text-slate-500 border-r border-slate-200 bg-slate-100">
+            <div className="flex items-center px-3 text-sm font-bold text-[var(--brand-neutral)] border-r border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(44,53,97,0.06)]">
               +971
             </div>
             <select
               value={phonePrefix}
               onChange={(e) => onPrefixChange(e.target.value)}
-              className="w-24 bg-transparent px-3 py-2 text-sm font-semibold text-slate-800 outline-none border-r border-slate-200"
+              className="w-24 bg-transparent px-3 py-2 text-sm font-semibold text-[var(--brand-primary-deep)] outline-none border-r border-[color:rgba(44,53,97,0.12)]"
             >
               {prefixOptions.map(prefix => (
                 <option key={prefix} value={prefix}>
@@ -124,7 +124,7 @@ export default function ContactSetupCard({
               value={phoneLocalNumber}
               maxLength={7}
               onChange={(e) => onPhoneLocalNumberChange(e.target.value)}
-              className="flex-1 bg-transparent px-3 py-2 focus:outline-none text-sm font-medium text-slate-900 placeholder:text-slate-400"
+              className="flex-1 bg-transparent px-3 py-2 focus:outline-none text-sm font-medium text-[var(--brand-primary-deep)] placeholder:text-[var(--brand-gray-light)]"
             />
           </div>
           {attempted && errors.phone && (
