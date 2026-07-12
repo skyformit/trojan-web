@@ -27,7 +27,7 @@ export default function PortalStepper({
     <section className="relative overflow-hidden rounded-[28px] border border-[color:rgba(74,103,163,0.12)] bg-[radial-gradient(circle_at_3%_18%,rgba(233,238,247,0.9),transparent_20%),radial-gradient(circle_at_90%_18%,rgba(225,242,250,0.75),transparent_16%),linear-gradient(180deg,rgba(251,252,255,1)_0%,rgba(247,249,253,1)_100%)] px-4 py-3.5 shadow-[0_16px_30px_rgba(15,23,42,0.05)] md:px-7 md:py-4">
       <div className="relative">
         <div
-          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[2.15rem] z-0 hidden h-[2px] rounded-full bg-[color:rgba(223,229,238,0.98)] md:block md:top-[2.4rem]"
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[2.05rem] z-0 hidden h-[2px] rounded-full bg-[color:rgba(223,229,238,0.98)] md:block md:top-[2.25rem]"
           style={{
             boxShadow: '0 0 0 1px rgba(255,255,255,0.85)',
           }}
@@ -36,7 +36,7 @@ export default function PortalStepper({
         <div
           className="pointer-events-none absolute left-[12.5%] z-10 hidden h-[2px] rounded-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-light)] md:block"
           style={{
-            top: '2.4rem',
+            top: '2.25rem',
             width: `calc(${activeLinePct}% - 12.5%)`,
             maxWidth: '75%',
           }}

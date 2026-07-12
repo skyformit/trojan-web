@@ -20,7 +20,7 @@ export default function StatusPill({ tone, children, className = '' }: StatusPil
   return (
     <span
       className={[
-        'inline-flex min-w-[96px] items-center justify-center gap-1 text-[10px] px-3 py-1 rounded-[10px] font-extrabold uppercase tracking-[0.18em] border',
+        'inline-flex min-w-[112px] shrink-0 flex-nowrap whitespace-nowrap items-center justify-center gap-1 text-[10px] leading-none px-3 py-1 rounded-[10px] font-extrabold uppercase tracking-[0.18em] border',
         toneStyles[tone],
         className,
       ].join(' ')}

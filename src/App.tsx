@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { SupplierRegistrationState, ChatMessage, DocumentVerification } from './types';
 import AIAgentChat from './components/AIAgentChat';
+import ContactSetupCard from './components/ui/ContactSetupCard';
 import VerificationPanel from './components/VerificationPanel';
 import { streamChatMessage } from './utils/chatStream';
 import PortalHeader from './components/PortalHeader';
@@ -28,21 +29,40 @@ import PortalWorkspace from './components/PortalWorkspace';
 function getDisplayOcrName(extracted: Record<string, any>, documentType?: 'trade_license' | 'vat_certificate' | 'bank_document') {
   if (documentType === 'bank_document') {
     return (
-      extracted?.accountName ||
+      extracted?.companyName ||
       extracted?.bankHolderName ||
       extracted?.beneficiaryName ||
-      extracted?.companyName ||
+      extracted?.accountName ||
+      extracted?.businessName ||
+      extracted?.legalNameEnglish ||
       extracted?.tradeName ||
       extracted?.bankName ||
       'N/A'
     );
   }
 
-  return extracted?.tradeName || extracted?.companyName || extracted?.legalNameEnglish || extracted?.businessName || 'N/A';
+  return extracted?.companyName || extracted?.businessName || extracted?.legalNameEnglish || extracted?.operatingName || extracted?.tradeName || 'N/A';
 }
 
 function getDisplayTradeName(extracted: Record<string, any>) {
   return extracted?.tradeName || 'N/A';
+}
+
+function pickBestCompanyName(...candidates: Array<string | null | undefined>) {
+  const normalizedCandidates = candidates
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  if (normalizedCandidates.length === 0) {
+    return '';
+  }
+
+  const score = (value: string) => {
+    const wordCount = value.replace(/[()]/g, ' ').split(/\s+/).filter(Boolean).length;
+    return wordCount * 100 + value.length;
+  };
+
+  return normalizedCandidates.sort((a, b) => score(b) - score(a))[0];
 }
 
 function getResultValue(results: Record<string, { value?: string }>, keys: string[]) {
@@ -527,10 +547,17 @@ function buildReconciliationPayload(
   const agentDocumentType = getAgentDecisionDocumentType(documentType);
   const parsedContextHint = parseMaybeJson(uploadContext?.contextHint);
   const requestedCompanyName =
-    uploadContext?.companyName?.trim() ||
-    registrationState.companyName?.trim() ||
-    String(extractionResponse.requestContext?.company_name || '').trim() ||
-    String((parsedContextHint as Record<string, any> | undefined)?.entities?.company_name || '').trim();
+    pickBestCompanyName(
+      uploadContext?.companyName,
+      registrationState.companyName,
+      extractionResponse.extractedData?.companyName,
+      extractionResponse.extractedData?.businessName,
+      extractionResponse.extractedData?.legalNameEnglish,
+      extractionResponse.extractedData?.operatingName,
+      extractionResponse.extractedData?.tradeName,
+      String(extractionResponse.requestContext?.company_name || '').trim(),
+      String((parsedContextHint as Record<string, any> | undefined)?.entities?.company_name || '').trim()
+    );
 
   const requestedLicenseNumber =
     uploadContext?.tradeLicenseNumber?.trim() ||
@@ -578,8 +605,8 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
     {};
 
   const normalized = analyzeData?.extractedData || {};
-  const tradeName = getResultValue(rawResults, ['TradeName', 'CompanyName', 'OperatingName', 'LegalNameEnglish', 'BusinessName']);
-  const companyName = tradeName || normalized.companyName || normalized.tradeName || '';
+  const companyName = getResultValue(rawResults, ['CompanyName', 'BusinessName', 'OperatingName', 'LegalNameEnglish', 'TradeName']);
+  const tradeName = getResultValue(rawResults, ['TradeName']);
   const licenseNumber = getResultValue(rawResults, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
     getResultValue(rawExtraction.results, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
     getResultValue(analyzeData?.results, ['LicenceNo', 'LicenseNo', 'LicenseNumber', 'UnifiedLicenceNo', 'UnifiedRegistrationNo']) ||
@@ -598,16 +625,17 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
 
     return {
       ...normalized,
-      tradeName,
-      companyName,
+      tradeName: normalized.tradeName || tradeName,
+      companyName: normalized.companyName || normalized.businessName || normalized.legalNameEnglish || companyName || tradeName,
       vatNumber: normalized.vatNumber || vatNumber,
       taxRegistrationNumber: normalized.taxRegistrationNumber || vatNumber,
-      issueDate: normalized.issueDate || getResultValue(rawResults, ['IssueDate', 'RegistrationDate']),
+      issueDate: normalized.issueDate || getResultValue(rawResults, ['IssueDate', 'issue_date', 'RegistrationDate']),
       expiryDate: normalized.expiryDate || getResultValue(rawResults, ['ExpiryDate']),
       activity: normalized.activity || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
       licensedActivities: normalized.licensedActivities || getResultValue(rawResults, ['LicenceActivities', 'LicensedActivities', 'Activity']),
       officialEmail: getResultValue(rawResults, ['OfficialEmail']),
       officialMobile: getResultValue(rawResults, ['OfficialMobile']),
+      issueAuthority: normalized.issueAuthority || getResultValue(rawResults, ['IssueAuthority', 'IssuingAuthority', 'issuing_authority', 'issue_authority', 'Authority']),
     };
   }
 
@@ -629,7 +657,7 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
     return {
       ...normalized,
       tradeName: normalized.tradeName || tradeName,
-      companyName: normalized.companyName || bankAccountName || tradeName,
+      companyName: normalized.companyName || normalized.businessName || normalized.legalNameEnglish || bankAccountName || companyName || tradeName,
       accountName: normalized.accountName || bankAccountName,
       beneficiaryName: normalized.beneficiaryName || bankAccountName,
       bankAccountNumber: normalized.bankAccountNumber || getResultValue(rawResults, ['BankAccountNumber', 'AccountNumber', 'IBAN']),
@@ -642,7 +670,7 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
   return {
     ...normalized,
     tradeName: normalized.tradeName || tradeName,
-    companyName: normalized.companyName || tradeName,
+    companyName: normalized.companyName || normalized.businessName || normalized.legalNameEnglish || companyName || tradeName,
     businessName: normalized.businessName || getResultValue(rawResults, ['BusinessName']),
     legalNameEnglish: normalized.legalNameEnglish || getResultValue(rawResults, ['LegalNameEnglish']),
     licenseNumber,
@@ -653,7 +681,7 @@ function mergeOcrExtraction(analyzeData: any, documentType: 'trade_license' | 'v
     manager: normalized.manager || getResultValue(rawResults, ['Manager', 'AuthorizedSignatory']),
     officialEmail: getResultValue(rawResults, ['OfficialEmail']),
     officialMobile: getResultValue(rawResults, ['OfficialMobile']),
-    issueAuthority: normalized.issueAuthority || getResultValue(rawResults, ['IssueAuthority', 'IssuingAuthority', 'Authority']),
+    issueAuthority: normalized.issueAuthority || getResultValue(rawResults, ['IssueAuthority', 'IssuingAuthority', 'issuing_authority', 'issue_authority', 'Authority']),
     address: normalized.address || getResultValue(rawResults, ['Address', 'CompanyAddress']),
     chamberNo: normalized.chamberNo || getResultValue(rawResults, ['ChamberNo', 'ChamberNumber']),
     website: normalized.website || getResultValue(rawResults, ['Website']),
@@ -1041,11 +1069,16 @@ export default function App() {
       const extracted = mergeOcrExtraction(analyzeData, type);
       const agentDocumentType = getAgentDecisionDocumentType(type);
       const ocrResults = analyzeData.results || analyzeData.rawResponse?.results || {};
-      const requestCompanyName =
-        uploadContext?.companyName?.trim() ||
-        registrationState.companyName?.trim() ||
-        String(analyzeData.requestContext?.company_name || '').trim() ||
-        '';
+      const requestCompanyName = pickBestCompanyName(
+        uploadContext?.companyName,
+        registrationState.companyName,
+        extracted.companyName,
+        extracted.businessName,
+        extracted.legalNameEnglish,
+        extracted.operatingName,
+        extracted.tradeName,
+        String(analyzeData.requestContext?.company_name || '').trim()
+      );
       const requestLicenseNumber =
         uploadContext?.tradeLicenseNumber?.trim() ||
         registrationState.tradeLicenseNumber?.trim() ||
@@ -1200,7 +1233,10 @@ export default function App() {
       const finalValidationHasExpiry = Boolean(
         finalValidation?.is_expired ||
         reconciliationData.validation?.is_expired ||
-        agent2Acceptance?.is_expired
+        agent2Acceptance?.is_expired ||
+        String(finalValidation?.status || '').toLowerCase() === 'expired' ||
+        String(reconciliationData.validation?.status || '').toLowerCase() === 'expired' ||
+        String(agent2Acceptance?.status || '').toLowerCase() === 'expired'
       );
       const uiDecision = finalValidationHasCompanyMismatch
         ? 'rejected'
@@ -1243,18 +1279,32 @@ export default function App() {
             ? 'EXPIRED'
             : 'REJECTED';
 
-      const issueReasonSource = Array.isArray(finalValidation?.reasons) && finalValidation.reasons.length > 0
-        ? finalValidation.reasons.join(' ')
-        : approvalReviewData?.text || reconciliationData.text || '';
-      const friendlyReason = issueReasonSource || (
-        uiDecision === 'approved'
-          ? 'The document was approved after extraction and TBMS reconciliation.'
-          : uiDecision === 'expired'
-            ? 'The document appears to be expired.'
-          : uiDecision === 'review'
-            ? 'The document needs a quick review before approval.'
-            : 'The document could not be approved after verification checks.'
-      );
+      const reasonParts = [
+        ...(Array.isArray(finalValidation?.reasons) ? finalValidation.reasons : []),
+        approvalReviewData?.text || '',
+        reconciliationData.text || '',
+      ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean);
+      const hasCompanyMismatchReason = finalValidationHasCompanyMismatch || reasonParts.some((reason) => /company name mismatch|does not match/i.test(reason));
+      const hasExpiryReason = finalValidationHasExpiry || reasonParts.some((reason) => /expired/i.test(reason));
+      const rejectionReasonParts = [
+        ...(hasCompanyMismatchReason ? ['Requested company does not match uploaded document company name.'] : []),
+        ...(hasExpiryReason ? ['The uploaded document appears to be expired.'] : []),
+        ...reasonParts,
+      ];
+      const friendlyReason =
+        rejectionReasonParts.length > 0
+          ? Array.from(new Set(rejectionReasonParts)).join(' ')
+          : (
+            uiDecision === 'approved'
+              ? 'The document was approved after extraction and TBMS reconciliation.'
+              : uiDecision === 'expired'
+                ? 'The document appears to be expired.'
+                : uiDecision === 'review'
+                  ? 'The document needs a quick review before approval.'
+                  : 'The document could not be approved after verification checks.'
+          );
       const friendlyNextStep = uiDecision === 'approved'
         ? (
           type === 'trade_license'
@@ -1522,6 +1572,24 @@ Next Step: ${friendlyNextStep}`
     }
   };
 
+  const handleCancelBackupContactPrompt = () => {
+    setShowBackupContactPrompt(false);
+    setBackupContactAttempted(false);
+    setBackupContactErrors({});
+  };
+
+  const handleSaveBackupContactInfo = () => {
+    setBackupContactAttempted(true);
+    const nextErrors = getBackupContactValidation();
+    setBackupContactErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length === 0) {
+      void handleSubmitRegistration();
+    } else {
+      setShowBackupContactPrompt(true);
+    }
+  };
+
   const handleReset = () => {
     setRegistrationState(initialRegistrationState);
     setChatHistory([createWelcomeMessage()]);
@@ -1684,6 +1752,37 @@ Next Step: ${friendlyNextStep}`
           currentStepIndex={currentStepIndex}
           getStepVisualState={getStepVisualState}
         />
+
+        {showBackupContactPrompt && !submissionComplete && (
+          <div className="w-full">
+            <ContactSetupCard
+              attempted={backupContactAttempted}
+              errors={backupContactErrors}
+              contactName={registrationState.backupContactName || ''}
+              contactEmail={registrationState.backupContactEmail || ''}
+              phoneMode="single"
+              phoneValue={registrationState.backupContactPhone || ''}
+              onContactNameChange={(value) =>
+                setRegistrationState(prev => ({ ...prev, backupContactName: value }))
+              }
+              onContactEmailChange={(value) =>
+                setRegistrationState(prev => ({ ...prev, backupContactEmail: value }))
+              }
+              onPhoneChange={(value) =>
+                setRegistrationState(prev => ({ ...prev, backupContactPhone: value.replace(/\D/g, '') }))
+              }
+              onSave={handleSaveBackupContactInfo}
+              title="Notification Contact Setup"
+              intro="For account verification, we need one more contact person and email address to reach out to you if your primary contact is unavailable."
+              buttonLabel="Submit"
+              cancelLabel="Cancel"
+              onCancel={handleCancelBackupContactPrompt}
+              phoneLabel="Primary Notification Phone"
+              phonePlaceholder="0500000003"
+              className="max-w-3xl mx-auto"
+            />
+          </div>
+        )}
         
         <PortalWorkspace
           submissionComplete={submissionComplete}
@@ -1807,147 +1906,6 @@ Next Step: ${friendlyNextStep}`
                 className="px-5 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-black transition"
               >
                 Retry Submission
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showBackupContactPrompt && !submissionComplete && (
-        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 bg-white flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.28em] font-bold text-[var(--brand-primary)]">Notification Contact Setup</p>
-                <h3 className="mt-1 text-lg font-black text-slate-900">Please add one more contact person</h3>
-                <p className="mt-2 text-xs text-slate-500 leading-relaxed max-w-2xl">
-                  For account verification, we need one more contact person and email address to reach out to you if your primary contact is unavailable.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBackupContactPrompt(false);
-                  setBackupContactAttempted(false);
-                  setBackupContactErrors({});
-                }}
-                className="text-slate-400 hover:text-slate-700 transition-colors"
-                aria-label="Close notification contact prompt"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-6 pb-6 space-y-4">
-              {backupContactAttempted && Object.keys(backupContactErrors).length > 0 && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Please fill in the additional contact details correctly before continuing.</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
-                  <span>Full Name</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. John Doe"
-                  value={registrationState.backupContactName || ''}
-                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactName: e.target.value }))}
-                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
-                    backupContactAttempted && backupContactErrors.name
-                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
-                  }`}
-                />
-                {backupContactAttempted && backupContactErrors.name && (
-                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>{backupContactErrors.name}</span>
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
-                  <span>Primary Notification Email</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder="john.doe@company.com"
-                  value={registrationState.backupContactEmail || ''}
-                  onChange={(e) => setRegistrationState(prev => ({ ...prev, backupContactEmail: e.target.value }))}
-                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
-                    backupContactAttempted && backupContactErrors.email
-                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
-                  }`}
-                />
-                {backupContactAttempted && backupContactErrors.email && (
-                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>{backupContactErrors.email}</span>
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-[var(--brand-sky)] shrink-0" />
-                  <span>UAE Mobile Phone Number</span>
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0500000003"
-                  value={registrationState.backupContactPhone || ''}
-                  onChange={(e) => {
-                    const digitsOnly = e.target.value.replace(/\D/g, '');
-                    setRegistrationState(prev => ({ ...prev, backupContactPhone: digitsOnly }));
-                  }}
-                  className={`w-full bg-slate-50 focus:bg-white rounded-lg px-4 py-3 focus:outline-none transition font-medium border ${
-                    backupContactAttempted && backupContactErrors.phone
-                      ? 'border-rose-300 focus:border-rose-500 bg-rose-50'
-                      : 'border-slate-200 focus:border-[var(--brand-primary)]'
-                  }`}
-                />
-                {backupContactAttempted && backupContactErrors.phone && (
-                  <p className="mt-1.5 text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>{backupContactErrors.phone}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBackupContactPrompt(false);
-                  setBackupContactAttempted(false);
-                  setBackupContactErrors({});
-                }}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-100 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setBackupContactAttempted(true);
-                  const nextErrors = getBackupContactValidation();
-                  setBackupContactErrors(nextErrors);
-                  if (Object.keys(nextErrors).length === 0) {
-                    void handleSubmitRegistration();
-                  }
-                }}
-                className="px-5 py-2 rounded-lg bg-slate-900 text-white font-bold text-sm hover:bg-black transition"
-              >
-                Submit
               </button>
             </div>
           </div>

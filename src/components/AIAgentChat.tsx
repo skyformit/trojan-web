@@ -289,13 +289,14 @@ export default function AIAgentChat({
       const rowMap = parseLabelValueRows(normalizedText.replace('[[DOCUMENT_REJECTED]]', ''));
       const rejectionSummary = rowMap['Rejection Summary'] || rowMap['Reason'] || 'This document could not be approved.';
       const normalizedSummary = rejectionSummary.toLowerCase();
-      const rejectionLabel = normalizedSummary.includes('expired')
-        ? 'Document Expired'
-        : normalizedSummary.includes('company name mismatch') || normalizedSummary.includes('does not match')
-          ? 'Company Name Mismatch'
-          : normalizedSummary.includes('document type')
-            ? 'Incorrect Document Type'
-            : 'Verification Failed';
+      const rejectionReasons = [
+        normalizedSummary.includes('company name mismatch') || normalizedSummary.includes('does not match') ? 'Company Name Mismatch' : '',
+        normalizedSummary.includes('expired') ? 'Expired' : '',
+        normalizedSummary.includes('document type') ? 'Incorrect Document Type' : '',
+      ].filter(Boolean);
+      const rejectionLabel = rejectionReasons.length > 0
+        ? rejectionReasons.join(' · ')
+        : 'Verification Failed';
       const orderedEntries = Object.entries(rowMap).filter(([label]) => label !== 'Next Step');
 
       return (
@@ -463,7 +464,7 @@ export default function AIAgentChat({
       </div>
 
       {/* Messages Scroll Frame */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-1.5 space-y-1 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.08),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.045),_transparent_18%),linear-gradient(180deg,_rgba(252,253,255,0.98),_rgba(246,249,255,0.96))]">
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-1.5 space-y-3 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.08),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.045),_transparent_18%),linear-gradient(180deg,_rgba(252,253,255,0.98),_rgba(246,249,255,0.96))]">
         {chatHistory.map((msg) => (
           <React.Fragment key={msg.id}>
             <ChatMessageBubble

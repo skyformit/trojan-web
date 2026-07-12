@@ -45,7 +45,7 @@ export default function ChatMessageBubble({
   const showAgentRail = isAgent;
 
   return (
-    <div className={`relative flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-2.5`}>
+    <div className={`relative flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-3.5`}>
       {showAgentRail && (
         <>
           <div

@@ -4,11 +4,11 @@ function json(data: unknown, status = 200) {
 
 function getBestCompanyName(extractedFields: Record<string, string>) {
   return (
-    extractedFields.tradeName ||
     extractedFields.companyName ||
+    extractedFields.businessName ||
     extractedFields.operatingName ||
     extractedFields.legalNameEnglish ||
-    extractedFields.businessName ||
+    extractedFields.tradeName ||
     "Verified Document"
   ).trim();
 }

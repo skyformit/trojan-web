@@ -158,7 +158,13 @@ export default function VerificationPanel({
   };
 
   const renderAcceptanceBadge = (doc: DocumentVerification) => {
-    const normalized = getAcceptanceDisplayStatus(doc);
+    const decisionReasonInfo = getDecisionReasonInfo(doc);
+    const normalized = decisionReasonInfo.displayStatus;
+    const badgeReasons = [];
+    if (normalized === 'rejected') badgeReasons.push('Company Name Mismatch');
+    if (normalized === 'expired') badgeReasons.push('Expired');
+    const badgeLabel = Array.from(new Set(badgeReasons)).join(' · ');
+
     if (normalized === 'approved') {
       return <StatusPill tone="success">Approved</StatusPill>;
     }
@@ -166,10 +172,10 @@ export default function VerificationPanel({
       return <StatusPill tone="warning">Review</StatusPill>;
     }
     if (normalized === 'expired') {
-      return <StatusPill tone="danger">Expired</StatusPill>;
+      return <StatusPill tone="danger">{badgeLabel || 'Expired'}</StatusPill>;
     }
     if (normalized === 'rejected') {
-      return <StatusPill tone="danger">Rejected</StatusPill>;
+      return <StatusPill tone="danger">{badgeLabel || 'Rejected'}</StatusPill>;
     }
     return <StatusPill tone="neutral">Unknown</StatusPill>;
   };
@@ -236,35 +242,57 @@ export default function VerificationPanel({
   };
 
   const score = getOverallProgress();
+  const verifiedCount = [trade_license, vat_certificate, bank_document].filter(
+    (doc) => getEffectiveDocStatus(doc) === 'verified'
+  ).length;
 
-  const buildDocumentSummaryRows = (doc: DocumentVerification) => {
+  const getDecisionReasonInfo = (doc: DocumentVerification) => {
     const displayStatus = getAcceptanceDisplayStatus(doc);
     const acceptanceStatus = String(doc.documentAcceptance?.status || '').toLowerCase();
-    const notesLabel = displayStatus === 'rejected'
-      ? 'Rejection Notes'
-      : displayStatus === 'expired'
-        ? 'Expiration Notes'
-        : acceptanceStatus === 'review'
-          ? 'Review Notes'
-          : 'Approval Notes';
     const notes = Array.isArray(doc.documentAcceptance?.reasons)
       ? doc.documentAcceptance.reasons.map(reason => formatAcceptanceReasonText(String(reason)))
       : [];
+    const missingFields = formatMissingFieldLabels(doc.documentAcceptance?.missing_fields);
+    const reasons: string[] = [];
+
+    if (displayStatus === 'rejected' || acceptanceStatus === 'rejected') {
+      reasons.push('Requested company does not match uploaded company name.');
+    }
+
+    if (displayStatus === 'expired' || acceptanceStatus === 'expired') {
+      reasons.push('The uploaded document appears to be expired.');
+    }
+
+    reasons.push(...notes, ...missingFields);
+
+    return {
+      displayStatus,
+      acceptanceStatus,
+      reasons: Array.from(new Set(reasons.filter(Boolean))),
+      hasDecisionReasons:
+        displayStatus === 'rejected' ||
+        displayStatus === 'expired' ||
+        acceptanceStatus === 'rejected' ||
+        acceptanceStatus === 'expired',
+    };
+  };
+
+  const buildDocumentSummaryRows = (doc: DocumentVerification) => {
+    const decisionReasonInfo = getDecisionReasonInfo(doc);
 
     return [
       { label: 'Document Type', value: formatAcceptanceValue(doc.documentAcceptance?.document_type) },
-      { label: 'Final Decision', value: formatAcceptanceValue(displayStatus || doc.documentAcceptance?.status) },
+      { label: 'Final Decision', value: formatAcceptanceValue(decisionReasonInfo.displayStatus || doc.documentAcceptance?.status) },
       { label: 'Decision Score', value: formatAcceptanceValue(doc.documentAcceptance?.score) },
-      { label: 'Missing Fields', value: formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance?.missing_fields)) },
       {
-        label: notesLabel,
-        value: notes.length > 0 ? (
+        label: decisionReasonInfo.hasDecisionReasons ? 'Decision Reasons' : 'Missing Fields',
+        value: decisionReasonInfo.reasons.length > 0 ? (
           <ul className="space-y-1 list-disc list-inside">
-            {notes.map((reason, index) => (
-              <li key={`${notesLabel}-${index}`}>{reason}</li>
+            {decisionReasonInfo.reasons.map((reason, index) => (
+              <li key={`${reason}-${index}`}>{reason}</li>
             ))}
           </ul>
-        ) : 'N/A',
+        ) : formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance?.missing_fields)),
       },
       { label: 'Expiry Date', value: formatAcceptanceValue(doc.documentAcceptance?.expiry_date) },
       { label: 'Expired', value: formatAcceptanceValue(doc.documentAcceptance?.is_expired) },
@@ -272,12 +300,24 @@ export default function VerificationPanel({
     ];
   };
 
-  const getExtractedValue = (doc: DocumentVerification, key: string) => {
-    const extractedData = doc.extractedData || {};
-    if (key === 'vatNumber') {
-      return extractedData.vatNumber || extractedData.taxRegistrationNumber || 'N/A';
+  const normalizeDetailValue = (value: unknown) => {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const normalized = text.toLowerCase();
+    if (normalized === 'n/a' || normalized === 'na' || normalized === 'null' || normalized === 'not_found' || normalized === 'not found') {
+      return null;
     }
-    return extractedData[key] || 'N/A';
+    return text;
+  };
+
+  const getExtractedValue = (doc: DocumentVerification, keys: string[]) => {
+    const extractedData = doc.extractedData || {};
+    for (const key of keys) {
+      const value = normalizeDetailValue(extractedData[key]);
+      if (value) return value;
+    }
+    return null;
   };
 
   const renderStatusDashboard = () => {
@@ -325,7 +365,7 @@ export default function VerificationPanel({
 
             <div className="shrink-0 text-right sm:pt-1">
               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">Pending</p>
-              <p className="mt-1 text-[18px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[22px]">0 / 3</p>
+              <p className="mt-1 text-[18px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[22px]">{verifiedCount} / 3</p>
               <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-[var(--brand-neutral)]">Awaiting</p>
             </div>
           </div>
@@ -714,8 +754,15 @@ export default function VerificationPanel({
   const renderDocumentDetailsTab = (
     doc: DocumentVerification,
     title: string,
-    fieldsDef: Array<{ key: string; label: string }>
+    fieldsDef: Array<{ keys: string[]; label: string }>
   ) => {
+    const extractedRows = fieldsDef
+      .map(({ label, keys }) => {
+        const value = getExtractedValue(doc, keys);
+        return value ? { label, value } : null;
+      })
+      .filter((row): row is { label: string; value: string } => row !== null);
+
     return (
       <div className="space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
@@ -734,16 +781,20 @@ export default function VerificationPanel({
             {/* Scanned/Extracted details */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded">
               <h5 className="text-[9px] uppercase font-bold text-slate-400 mb-3 tracking-widest">Extracted Compliance Fields</h5>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {fieldsDef.map((def) => (
-                  <div key={def.key} className="border-b border-slate-200 pb-1.5">
-                    <span className="block text-[9px] uppercase font-bold text-slate-400">{def.label}:</span>
-                    <span className="text-xs font-bold text-slate-800 font-mono">
-                      {getExtractedValue(doc, def.key)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {extractedRows.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {extractedRows.map((row) => (
+                    <div key={row.label} className="border-b border-slate-200 pb-1.5">
+                      <span className="block text-[9px] uppercase font-bold text-slate-400">{row.label}:</span>
+                      <span className="text-xs font-bold text-slate-800 font-mono">
+                        {row.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] italic text-slate-400">No extracted compliance fields were returned for this document.</p>
+              )}
 
               {doc.processingTime && (
                 <div className="mt-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded border border-[color:rgba(44,53,97,0.18)] bg-[color:rgba(44,53,97,0.06)] text-[var(--brand-primary)]">
@@ -840,30 +891,30 @@ export default function VerificationPanel({
         trade_license,
         'Trade License',
         [
-          { key: 'licenseNumber', label: 'License Number' },
-          { key: 'companyName', label: 'Extracted Company' },
-          { key: 'expiryDate', label: 'Expiry Date' },
-          { key: 'licensedActivities', label: 'Licensed Activities' }
+          { keys: ['licenseNumber', 'license_number', 'tradeLicNo'], label: 'License Number' },
+          { keys: ['companyName', 'company_name', 'tradeName', 'trade_name'], label: 'Extracted Company' },
+          { keys: ['expiryDate', 'expiry_date'], label: 'Expiry Date' },
+          { keys: ['licensedActivities', 'licensed_activities', 'activity'], label: 'Licensed Activities' }
         ]
       )}
       {activeTab === 'vat' && renderDocumentDetailsTab(
         vat_certificate,
         'VAT Certificate',
         [
-          { key: 'vatNumber', label: 'VAT Registration No' },
-          { key: 'companyName', label: 'Company Name' },
-          { key: 'registrationDate', label: 'Registration Date' },
-          { key: 'status', label: 'Registration Standing' }
+          { keys: ['vatNumber', 'taxRegistrationNumber', 'tax_registration_number', 'registrationNumber', 'registration_number'], label: 'VAT Registration No' },
+          { keys: ['companyName', 'company_name', 'tradeName', 'trade_name'], label: 'Company Name' },
+          { keys: ['issueDate', 'issue_date', 'registrationDate', 'registration_date'], label: 'Issue Date' },
+          { keys: ['issueAuthority', 'issue_authority', 'issuingAuthority', 'issuing_authority'], label: 'Issuing Authority' }
         ]
       )}
       {activeTab === 'bank_document' && renderDocumentDetailsTab(
         bank_document,
         'Official Bank Document',
         [
-          { key: 'bankAccountNumber', label: 'Account Number/IBAN' },
-          { key: 'bankName', label: 'Financial Institution' },
-          { key: 'beneficiaryName', label: 'Beneficiary Name' },
-          { key: 'iban', label: 'IBAN Number' }
+          { keys: ['bankAccountNumber', 'bank_account_number', 'iban'], label: 'Account Number/IBAN' },
+          { keys: ['bankName', 'bank_name'], label: 'Financial Institution' },
+          { keys: ['beneficiaryName', 'beneficiary_name', 'accountName', 'account_name'], label: 'Beneficiary Name' },
+          { keys: ['iban'], label: 'IBAN Number' }
         ]
       )}
     </div>

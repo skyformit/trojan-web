@@ -112,6 +112,23 @@ export function getResultValue(
   return "";
 }
 
+export function pickBestCompanyName(...candidates: Array<string | null | undefined>) {
+  const normalizedCandidates = candidates
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (normalizedCandidates.length === 0) {
+    return "";
+  }
+
+  const score = (value: string) => {
+    const wordCount = value.replace(/[()]/g, " ").split(/\s+/).filter(Boolean).length;
+    return wordCount * 100 + value.length;
+  };
+
+  return normalizedCandidates.sort((a, b) => score(b) - score(a))[0];
+}
+
 export function getMimeTypeFromDataUrl(fileBase64: string, fallbackMimeType: string) {
   const match = fileBase64.match(/^data:([^;]+);base64,/);
   return match?.[1] || fallbackMimeType || "application/octet-stream";
@@ -132,11 +149,11 @@ export function normalizeValidationResponse(
   if (documentType === "trade_license") {
     const tradeName = getResultValue(results, ["TradeName"]);
     const companyName = getResultValue(results, [
-      "TradeName",
       "CompanyName",
+      "BusinessName",
       "OperatingName",
       "LegalNameEnglish",
-      "BusinessName",
+      "TradeName",
     ]);
     const licensedActivities = getResultValue(results, [
       "LicenceActivities",
@@ -158,17 +175,18 @@ export function normalizeValidationResponse(
       licensedActivities,
       status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
       manager: getResultValue(results, ["Manager", "AuthorizedSignatory"]),
+      issueAuthority: getResultValue(results, ["IssueAuthority", "IssuingAuthority", "issuing_authority", "issue_authority"]),
     };
   }
 
   if (documentType === "vat_certificate") {
     const tradeName = getResultValue(results, ["TradeName"]);
     const companyName = getResultValue(results, [
-      "TradeName",
       "CompanyName",
       "LegalNameEnglish",
       "BusinessName",
       "OperatingName",
+      "TradeName",
     ]);
 
     return {
@@ -186,7 +204,8 @@ export function normalizeValidationResponse(
       ]),
       companyName,
       tradeName,
-      registrationDate: getResultValue(results, ["RegistrationDate", "IssueDate"]),
+      registrationDate: getResultValue(results, ["IssueDate", "issue_date", "RegistrationDate"]),
+      issueAuthority: getResultValue(results, ["IssueAuthority", "IssuingAuthority", "issuing_authority", "issue_authority"]),
       status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
     };
   }
@@ -199,11 +218,11 @@ export function normalizeValidationResponse(
     ]),
     bankName: getResultValue(results, ["BankName", "Bank"]),
     companyName: getResultValue(results, [
-      "TradeName",
       "AccountName",
       "CompanyName",
       "LegalNameEnglish",
       "BusinessName",
+      "TradeName",
     ]),
     tradeName: getResultValue(results, ["TradeName"]),
     status: validationSucceeded ? "ACTIVE" : "NOT_FOUND",
