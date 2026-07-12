@@ -1656,7 +1656,7 @@ Next Step: ${friendlyNextStep}`
             />
           }
           title="Secure Supplier Portal"
-          subtitle="Smart verification, secure onboarding."
+          subtitle="Smart Verification, Secure Onboarding."
           sessionId={String(orchestratorResponse?.context?.conversation_id || liveConversationId || sessionLabel)}
           startedAt={sessionStartedAt}
         />
