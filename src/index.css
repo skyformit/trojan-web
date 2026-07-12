@@ -64,13 +64,13 @@
 
 :root {
   --brand-primary: #2c3561;
-  --brand-primary-mid: #334072;
+  --brand-primary-mid: #5162a6;
   --brand-primary-hover: #222b54;
   --brand-primary-deep: #1a1a1a;
   --brand-neutral: #53565a;
-  --brand-sky: #008eb9;
-  --brand-sky-light: #6db3d9;
-  --brand-sky-accent: #1da0cf;
+  --brand-sky: #1a9cc6;
+  --brand-sky-light: #86c7e3;
+  --brand-sky-accent: #39acd7;
   --brand-gray-light: #b9babb;
   --brand-beige: #d8cfbc;
   --brand-brown: #b9835a;

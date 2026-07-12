@@ -12,7 +12,7 @@ const toneStyles: Record<StatusTone, string> = {
   success: 'text-[var(--brand-primary)] bg-[color:rgba(44,53,97,0.08)] border-[color:rgba(44,53,97,0.14)]',
   warning: 'text-[var(--brand-brown)] bg-[color:rgba(185,131,90,0.12)] border-[color:rgba(185,131,90,0.18)]',
   danger: 'text-[var(--brand-danger)] bg-[color:rgba(214,63,75,0.08)] border-[color:rgba(214,63,75,0.18)]',
-  neutral: 'text-[var(--brand-neutral)] bg-[color:rgba(83,86,90,0.08)] border-[color:rgba(83,86,90,0.16)]',
+  neutral: 'text-[var(--brand-danger)] bg-[color:rgba(214,63,75,0.10)] border-[color:rgba(214,63,75,0.18)]',
   info: 'text-[var(--brand-primary)] bg-[color:rgba(44,53,97,0.08)] border-[color:rgba(44,53,97,0.14)]',
 };
 

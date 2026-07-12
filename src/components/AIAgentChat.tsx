@@ -453,7 +453,7 @@ export default function AIAgentChat({
             </h2>
             <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[var(--brand-neutral)] md:text-[11px]">
               <span className="w-2 h-2 rounded-full bg-[var(--brand-sky)] shadow-[0_0_0_4px_rgba(0,142,185,0.12)]" />
-              <span>Real-time OCR Validation · Online</span>
+              <span>Real-Time Verification · Online</span>
             </div>
           </div>
         </div>

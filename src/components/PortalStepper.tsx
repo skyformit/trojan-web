@@ -67,13 +67,13 @@ export default function PortalStepper({
               <div key={step.id} className="relative flex flex-col items-center text-center">
                 <div className="relative z-10 flex w-full flex-col items-center">
                   <div className={`relative flex h-[3.5rem] w-[3.5rem] items-center justify-center rounded-full border-[2px] md:h-[4rem] md:w-[4rem] ${circleClass}`}>
-                    <div className="relative flex h-[1.45rem] w-[1.45rem] items-center justify-center rounded-full bg-transparent md:h-[1.65rem] md:w-[1.65rem]">
+                    <div className="relative flex h-[1.9rem] w-[1.9rem] items-center justify-center rounded-full bg-transparent md:h-[2rem] md:w-[2rem]">
                       {isFailed ? (
-                        <XCircle className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
+                        <XCircle className="h-[1.15rem] w-[1.15rem] md:h-[1.25rem] md:w-[1.25rem]" />
                       ) : isReview ? (
-                        <AlertCircle className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
+                        <AlertCircle className="h-[1.15rem] w-[1.15rem] md:h-[1.25rem] md:w-[1.25rem]" />
                       ) : isCompleted ? (
-                        <Check className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
+                        <Check className="h-[1.15rem] w-[1.15rem] md:h-[1.25rem] md:w-[1.25rem]" />
                       ) : (
                         step.icon(isActive, isCompleted)
                       )}

@@ -371,14 +371,23 @@ export default function VerificationPanel({
               { doc: vat_certificate, tab: 'vat', label: 'VAT Registration Ledger', key: 'vat_certificate', id: 'VAT' },
               { doc: bank_document, tab: 'bank_document', label: 'Bank Account Statement', key: 'bank_document', id: 'BANK' }
             ] as const).map(({ doc, tab, label, id }) => (
+              (() => {
+                const status = getEffectiveDocStatus(doc);
+                const isMissing = status === 'empty';
+                return (
               <button
                 key={id}
                 onClick={() => setActiveTab(tab)}
                 className="flex items-start justify-between gap-3 rounded-[16px] border border-slate-200/90 bg-white px-4 py-3 text-left shadow-[0_6px_14px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 sm:items-center md:px-4 md:py-3.5"
               >
                 <div className="flex min-w-0 items-start gap-3 sm:items-center">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-[14px] ${getEffectiveDocStatus(doc) === 'verified' ? 'bg-[color:rgba(44,53,97,0.08)] text-[var(--brand-primary)]' : 'bg-slate-100 text-slate-500'} md:h-11 md:w-11`}>
-                    <FileText className="h-[18px] w-[18px]" />
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-[14px] border ${status === 'verified'
+                      ? 'border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(44,53,97,0.08)] text-[var(--brand-primary)]'
+                      : isMissing
+                        ? 'border-[color:rgba(214,63,75,0.14)] bg-[color:rgba(214,63,75,0.08)] text-[var(--brand-danger)]'
+                        : 'border-slate-200 bg-slate-100 text-slate-500'
+                    } md:h-11 md:w-11`}>
+                    <FileText className={`h-[18px] w-[18px] ${isMissing ? 'text-[var(--brand-danger)]' : ''}`} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-[13px] font-bold text-slate-900 md:text-[14px]">{label}</p>
@@ -410,6 +419,8 @@ export default function VerificationPanel({
                 </div>
                 {getDocStatusBadge(doc)}
               </button>
+                );
+              })()
             ))}
           </div>
         </div>

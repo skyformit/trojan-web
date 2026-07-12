@@ -1615,25 +1615,25 @@ Next Step: ${friendlyNextStep}`
       id: 1,
       label: 'Document Intake',
       desc: 'Document Collection',
-      icon: () => <Upload className="w-4 h-4" />
+      icon: () => <Upload className="w-5 h-5" />
     },
     {
       id: 2,
       label: 'Document Review',
       desc: 'Validation & Checks',
-      icon: () => <Building2 className="w-4 h-4" />
+      icon: () => <Building2 className="w-5 h-5" />
     },
     {
       id: 3,
       label: 'Compliance Review',
       desc: 'Decision Review',
-      icon: () => <ShieldCheck className="w-4 h-4" />
+      icon: () => <ShieldCheck className="w-5 h-5" />
     },
     {
       id: 4,
       label: 'Approved',
       desc: 'Ready for Onboarding',
-      icon: () => <CheckCircle2 className="w-4 h-4" />
+      icon: () => <CheckCircle2 className="w-5 h-5" />
     }
   ];
 
@@ -1652,11 +1652,11 @@ Next Step: ${friendlyNextStep}`
             <img
               src="/trojan-logo.jpeg"
               alt="Trojan Construction Holding"
-              className="h-14 w-auto max-w-[150px] object-contain md:h-16 md:max-w-[180px]"
+              className="h-10 w-auto max-w-[120px] object-contain md:h-14 md:max-w-[160px] max-[820px]:h-9 max-[820px]:max-w-[108px]"
             />
           }
           title="Secure Supplier Portal"
-          subtitle="Real-time OCR compliance validation, and enterprise-grade onboarding."
+          subtitle="Smart verification, secure onboarding."
           sessionId={String(orchestratorResponse?.context?.conversation_id || liveConversationId || sessionLabel)}
           startedAt={sessionStartedAt}
         />
