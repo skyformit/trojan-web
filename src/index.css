@@ -88,7 +88,8 @@ body,
 body {
   background: linear-gradient(180deg, #f7f9fd 0%, #ffffff 100%);
   color: var(--brand-primary-deep);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 ::selection {

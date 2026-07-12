@@ -255,12 +255,12 @@ export default function VerificationPanel({
     const missingFields = formatMissingFieldLabels(doc.documentAcceptance?.missing_fields);
     const reasons: string[] = [];
 
-    if (displayStatus === 'rejected' || acceptanceStatus === 'rejected') {
-      reasons.push('Requested company does not match uploaded company name.');
-    }
-
     if (displayStatus === 'expired' || acceptanceStatus === 'expired') {
       reasons.push('The uploaded document appears to be expired.');
+    }
+
+    if (displayStatus === 'rejected' || acceptanceStatus === 'rejected') {
+      reasons.push('Requested company does not match uploaded company name.');
     }
 
     reasons.push(...notes, ...missingFields);
@@ -277,13 +277,29 @@ export default function VerificationPanel({
     };
   };
 
+  const getDecisionScoreValue = (doc: DocumentVerification) => {
+    const decisionReasonInfo = getDecisionReasonInfo(doc);
+    const hasBlockingIssue =
+      decisionReasonInfo.hasDecisionReasons ||
+      (doc.documentAcceptance?.missing_fields?.length || 0) > 0 ||
+      Boolean(doc.documentAcceptance?.is_expired) ||
+      String(doc.documentAcceptance?.status || '').toLowerCase() === 'rejected' ||
+      String(doc.documentAcceptance?.status || '').toLowerCase() === 'expired';
+
+    if (hasBlockingIssue) {
+      return 0;
+    }
+
+    return doc.documentAcceptance?.score;
+  };
+
   const buildDocumentSummaryRows = (doc: DocumentVerification) => {
     const decisionReasonInfo = getDecisionReasonInfo(doc);
     const isVatDocument = String(doc.documentAcceptance?.document_type || doc.type || '').toLowerCase().includes('vat');
     const rows = [
       { label: 'Document Type', value: formatAcceptanceValue(doc.documentAcceptance?.document_type) },
       { label: 'Final Decision', value: formatAcceptanceValue(decisionReasonInfo.displayStatus || doc.documentAcceptance?.status) },
-      { label: 'Decision Score', value: formatAcceptanceValue(doc.documentAcceptance?.score) },
+      { label: 'Decision Score', value: formatAcceptanceValue(getDecisionScoreValue(doc)) },
       {
         label: decisionReasonInfo.hasDecisionReasons ? 'Decision Reasons' : 'Missing Fields',
         value: decisionReasonInfo.reasons.length > 0 ? (
@@ -296,7 +312,7 @@ export default function VerificationPanel({
       },
     ];
 
-    if (!isVatDocument) {
+    if (doc.type === 'trade_license' && !isVatDocument) {
       rows.push(
         { label: 'Expiry Date', value: formatAcceptanceValue(doc.documentAcceptance?.expiry_date) },
         { label: 'Expired', value: formatAcceptanceValue(doc.documentAcceptance?.is_expired) }
@@ -844,10 +860,10 @@ export default function VerificationPanel({
   };
 
   return (
-    <div className="relative h-[min(600px,calc(100dvh-14rem))] overflow-y-auto overflow-x-hidden rounded-[28px] border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_34px_rgba(15,23,42,0.07)] md:h-[600px] md:p-7">
+    <div className="relative h-full min-h-0 overflow-y-auto overflow-x-hidden rounded-[28px] border border-slate-200 bg-white p-4 text-slate-800 shadow-[0_18px_34px_rgba(15,23,42,0.07)] md:p-5">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(44,53,97,0.04)] md:h-[3px]" />
       {/* Title block */}
-      <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+      <div className="mb-3.5 flex items-start justify-between gap-4 border-b border-slate-200 pb-2.5">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[0.32em] text-slate-400">Real-Time Registration Auditor</p>
           <h3 className="mt-1 text-[17px] font-bold text-[var(--brand-primary)]">Document review and verification</h3>
@@ -858,10 +874,10 @@ export default function VerificationPanel({
       </div>
 
       {/* Tabs list */}
-      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-slate-200 text-xs text-slate-400">
+      <div className="mb-3.5 flex gap-2 overflow-x-auto border-b border-slate-200 text-xs text-slate-400">
         <button
           onClick={() => setActiveTab('status')}
-          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+          className={`border-b-2 px-4 pb-2 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
             activeTab === 'status' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
@@ -869,7 +885,7 @@ export default function VerificationPanel({
         </button>
         <button
           onClick={() => setActiveTab('trade')}
-          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+          className={`border-b-2 px-4 pb-2 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
             activeTab === 'trade' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
@@ -877,7 +893,7 @@ export default function VerificationPanel({
         </button>
         <button
           onClick={() => setActiveTab('vat')}
-          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+          className={`border-b-2 px-4 pb-2 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
             activeTab === 'vat' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >
@@ -885,7 +901,7 @@ export default function VerificationPanel({
         </button>
         <button
           onClick={() => setActiveTab('bank_document')}
-          className={`border-b-2 px-4 pb-3 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
+          className={`border-b-2 px-4 pb-2 pt-1 font-extrabold uppercase tracking-[0.22em] transition ${
             activeTab === 'bank_document' ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : 'border-transparent hover:text-slate-800'
           }`}
         >

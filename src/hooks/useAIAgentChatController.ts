@@ -65,14 +65,45 @@ export function useAIAgentChatController({
   const [vendorLookupSummary, setVendorLookupSummary] = useState<VendorLookupSummary[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastConversationContextRef = useRef<GeneralBotResponse['context'] | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
 
   const uploadTypeForCurrentStep = getUploadTypeForStep(registrationState.currentStep);
 
+  const scrollMessagesToLatest = (behavior: ScrollBehavior = 'auto') => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+    }
+
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      const nextContainer = messagesContainerRef.current;
+      if (!nextContainer) return;
+
+      nextContainer.scrollTo({
+        top: nextContainer.scrollHeight,
+        behavior,
+      });
+    });
+  };
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const latestMessage = chatHistory[chatHistory.length - 1];
+    const shouldSmoothScroll = latestMessage?.sender === 'agent' || latestMessage?.sender === 'system';
+    scrollMessagesToLatest(shouldSmoothScroll ? 'smooth' : 'auto');
+
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
   }, [chatHistory, isRequestInProgress, vendorLookupSummary, registrationState.currentStep, registrationState.workflowRoute]);
 
   useEffect(() => {
@@ -317,6 +348,7 @@ export function useAIAgentChatController({
     };
 
     setChatHistory(prev => [...prev, newUserMessage]);
+    scrollMessagesToLatest();
 
     setTimeout(() => {
       processAgentResponse(text);
@@ -351,6 +383,7 @@ export function useAIAgentChatController({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
+    scrollMessagesToLatest();
 
     setTimeout(async () => {
       setRegistrationState(prev => ({
@@ -402,6 +435,7 @@ We will verify your company's credentials after the upload.`
       text: `Getting your ${documentLabel} ready for review...`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }]);
+    scrollMessagesToLatest();
 
     try {
       setChatHistory(prev => [...prev, {
@@ -410,6 +444,7 @@ We will verify your company's credentials after the upload.`
         text: `We have received your ${documentLabel}. Starting the review now...`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
+      scrollMessagesToLatest();
 
       await onAnalyzeDocument(
         type,
@@ -492,7 +527,7 @@ We will verify your company's credentials after the upload.`
     uaePhoneLocalNumber,
     conversationId,
     vendorLookupSummary,
-    chatEndRef,
+    messagesContainerRef,
     fileInputRef,
     dragActive,
     setDragActive,

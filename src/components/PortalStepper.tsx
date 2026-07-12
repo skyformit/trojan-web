@@ -24,7 +24,7 @@ export default function PortalStepper({
   const activeLinePct = Math.max(0, Math.min(100, (currentStepIndex / steps.length) * 100));
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-[color:rgba(74,103,163,0.12)] bg-[radial-gradient(circle_at_3%_18%,rgba(233,238,247,0.9),transparent_20%),radial-gradient(circle_at_90%_18%,rgba(225,242,250,0.75),transparent_16%),linear-gradient(180deg,rgba(251,252,255,1)_0%,rgba(247,249,253,1)_100%)] px-4 py-3.5 shadow-[0_16px_30px_rgba(15,23,42,0.05)] md:px-7 md:py-4">
+    <section className="relative overflow-hidden rounded-[28px] border border-[color:rgba(74,103,163,0.12)] bg-[radial-gradient(circle_at_3%_18%,rgba(233,238,247,0.9),transparent_20%),radial-gradient(circle_at_90%_18%,rgba(225,242,250,0.75),transparent_16%),linear-gradient(180deg,rgba(251,252,255,1)_0%,rgba(247,249,253,1)_100%)] px-4 py-3 shadow-[0_16px_30px_rgba(15,23,42,0.05)] md:px-6 md:py-3.5">
       <div className="relative">
         <div
           className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[2.05rem] z-0 hidden h-[2px] rounded-full bg-[color:rgba(223,229,238,0.98)] md:block md:top-[2.25rem]"
@@ -42,7 +42,7 @@ export default function PortalStepper({
           }}
           aria-hidden="true"
         />
-        <div className="relative grid grid-cols-1 gap-4 md:grid-cols-4 md:gap-0 md:px-1">
+        <div className="relative grid grid-cols-1 gap-3.5 md:grid-cols-4 md:gap-0 md:px-1">
           {steps.map((step, index) => {
             const stepState = getStepVisualState(step.id);
             const isActive = stepState === 'in_progress';
@@ -66,7 +66,7 @@ export default function PortalStepper({
             return (
               <div key={step.id} className="relative flex flex-col items-center text-center">
                 <div className="relative z-10 flex w-full flex-col items-center">
-                  <div className={`relative flex h-[3.5rem] w-[3.5rem] items-center justify-center rounded-full border-[2px] md:h-[4rem] md:w-[4rem] ${circleClass}`}>
+                  <div className={`relative flex h-[3.35rem] w-[3.35rem] items-center justify-center rounded-full border-[2px] md:h-[3.85rem] md:w-[3.85rem] ${circleClass}`}>
                     <div className="relative flex h-[1.9rem] w-[1.9rem] items-center justify-center rounded-full bg-transparent md:h-[2rem] md:w-[2rem]">
                       {isFailed ? (
                         <XCircle className="h-[1.15rem] w-[1.15rem] md:h-[1.25rem] md:w-[1.25rem]" />
@@ -83,7 +83,7 @@ export default function PortalStepper({
                     </span>
                   </div>
 
-                  <div className="mt-2 space-y-1 md:mt-3 md:space-y-1.25">
+                  <div className="mt-1.5 space-y-1 md:mt-2.5 md:space-y-1">
                     <span
                       className={`block text-[9px] font-black uppercase tracking-[0.28em] md:text-[10px] md:tracking-[0.3em] ${
                         isFailed

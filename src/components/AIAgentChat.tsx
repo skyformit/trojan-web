@@ -49,7 +49,7 @@ export default function AIAgentChat({
     uaePhoneLocalNumber,
     conversationId,
     vendorLookupSummary,
-    chatEndRef,
+    messagesContainerRef,
     fileInputRef,
     dragActive,
     setDragActive,
@@ -439,11 +439,11 @@ export default function AIAgentChat({
     return renderTextBlocks(normalizedText);
   };
   return (
-    <div className="relative flex h-[min(600px,calc(100dvh-14rem))] flex-col overflow-hidden rounded-[30px] border border-[color:rgba(74,103,163,0.12)] bg-[linear-gradient(180deg,rgba(252,253,255,0.98)_0%,rgba(249,251,255,0.95)_22%,rgba(246,249,255,0.92)_100%)] shadow-[0_20px_54px_rgba(15,23,42,0.08)] md:h-[600px]">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[30px] border border-[color:rgba(74,103,163,0.12)] bg-[linear-gradient(180deg,rgba(252,253,255,0.98)_0%,rgba(249,251,255,0.95)_22%,rgba(246,249,255,0.92)_100%)] shadow-[0_20px_54px_rgba(15,23,42,0.08)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(74,103,163,0.04)] md:h-[3px]" />
 
       {/* Chat header */}
-      <div className="flex items-center justify-between border-b border-[color:rgba(215,225,239,0.92)] bg-white/94 px-5 py-2 md:px-6 md:py-2.5">
+      <div className="flex items-center justify-between border-b border-[color:rgba(215,225,239,0.92)] bg-white/94 px-4 py-1.5 md:px-5 md:py-[0.45rem]">
         <div className="flex items-center gap-3 md:gap-3.5">
           <AnimatedAiOrb variant="header" showStatus />
           <div>
@@ -464,7 +464,7 @@ export default function AIAgentChat({
       </div>
 
       {/* Messages Scroll Frame */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-1.5 space-y-3 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.08),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.045),_transparent_18%),linear-gradient(180deg,_rgba(252,253,255,0.98),_rgba(246,249,255,0.96))]">
+      <div ref={messagesContainerRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-1 space-y-2.5 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.08),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.045),_transparent_18%),linear-gradient(180deg,_rgba(252,253,255,0.98),_rgba(246,249,255,0.96))]">
         {chatHistory.map((msg) => (
           <React.Fragment key={msg.id}>
             <ChatMessageBubble
@@ -513,8 +513,6 @@ export default function AIAgentChat({
         )}
 
         {isRequestInProgress && <ProcessingIndicator />}
-
-        <div ref={chatEndRef} />
       </div>
 
       {/* Drag and Drop wrapper surrounding action input area */}
@@ -535,8 +533,8 @@ export default function AIAgentChat({
 
       {/* Input Form area */}
       {!showContactSetup && (
-      <div className="border-t border-[color:rgba(74,103,163,0.10)] bg-white/94 px-4 py-1.5 backdrop-blur">
-          <div className="rounded-[22px] border border-[color:rgba(74,103,163,0.10)] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)] px-3 py-[2px]">
+        <div className="border-t border-[color:rgba(74,103,163,0.10)] bg-white/94 px-4 py-[0.35rem] backdrop-blur">
+          <div className="rounded-[22px] border border-[color:rgba(74,103,163,0.10)] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)] px-3 py-[1px]">
             <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
               <button
                 type="button"
@@ -587,7 +585,7 @@ export default function AIAgentChat({
                 </button>
               </div>
             </div>
-            <div className="mt-1.5 flex flex-col gap-1 px-1 text-[11px] leading-[1.35] text-[var(--brand-neutral)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-1 flex flex-col gap-1 px-1 text-[11px] leading-[1.35] text-[var(--brand-neutral)] sm:flex-row sm:items-center sm:justify-between">
               <span className="font-medium text-[var(--brand-neutral)]">Press ↵ to send · ⇧↵ for a new line</span>
               <span className="inline-flex items-center gap-1 font-medium text-[var(--brand-neutral)]">
                 <span className="h-2 w-2 rounded-full bg-[var(--brand-sky)]" />

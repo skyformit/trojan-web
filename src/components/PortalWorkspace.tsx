@@ -136,8 +136,8 @@ export default function PortalWorkspace({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-      <div className="lg:col-span-7 xl:col-span-8 h-full">
+    <div className="grid h-full min-h-0 flex-1 grid-cols-1 items-stretch gap-3.5 lg:grid-cols-12">
+      <div className="flex h-full min-h-0 lg:col-span-7 xl:col-span-8">
         <AIAgentChat
           registrationState={registrationState}
           setRegistrationState={setRegistrationState}
@@ -148,7 +148,7 @@ export default function PortalWorkspace({
         />
       </div>
 
-      <div className="lg:col-span-5 xl:col-span-4 text-slate-800 h-full">
+      <div className="flex h-full min-h-0 lg:col-span-5 xl:col-span-4 text-slate-800">
         <VerificationPanel
           registrationState={registrationState}
           setRegistrationState={setRegistrationState}
