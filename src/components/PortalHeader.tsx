@@ -23,7 +23,7 @@ export default function PortalHeader({
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3 md:gap-3.5">
           {logo && (
-            <div className="shrink-0 pt-0.5">
+            <div className="shrink-0 self-start pt-0">
               {logo}
             </div>
           )}

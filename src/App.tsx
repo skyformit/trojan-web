@@ -1652,7 +1652,8 @@ Next Step: ${friendlyNextStep}`
             <img
               src="/trojan-logo.jpeg"
               alt="Trojan Construction Holding"
-              className="h-10 w-auto max-w-[120px] object-contain md:h-14 md:max-w-[160px] max-[820px]:h-9 max-[820px]:max-w-[108px]"
+              className="block h-auto w-auto max-w-[clamp(96px,10vw,160px)] object-contain"
+              style={{ maxHeight: 'clamp(34px, 4.2vw, 56px)' }}
             />
           }
           title="Secure Supplier Portal"
