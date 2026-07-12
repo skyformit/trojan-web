@@ -8,6 +8,7 @@ type PortalWorkspaceProps = {
   submissionComplete: boolean;
   registrationState: SupplierRegistrationState;
   setRegistrationState: Dispatch<SetStateAction<SupplierRegistrationState>>;
+  onConversationIdChange?: (conversationId: string | null) => void;
   chatHistory: ChatMessage[];
   setChatHistory: Dispatch<SetStateAction<ChatMessage[]>>;
   onAnalyzeDocument: (
@@ -111,6 +112,7 @@ export default function PortalWorkspace({
   submissionComplete,
   registrationState,
   setRegistrationState,
+  onConversationIdChange,
   chatHistory,
   setChatHistory,
   onAnalyzeDocument,
@@ -135,17 +137,18 @@ export default function PortalWorkspace({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-      <div className="lg:col-span-6 xl:col-span-7 h-full">
+      <div className="lg:col-span-7 xl:col-span-8 h-full">
         <AIAgentChat
           registrationState={registrationState}
           setRegistrationState={setRegistrationState}
+          onConversationIdChange={onConversationIdChange}
           onAnalyzeDocument={onAnalyzeDocument}
           chatHistory={chatHistory}
           setChatHistory={setChatHistory}
         />
       </div>
 
-      <div className="lg:col-span-6 xl:col-span-5 text-slate-800 h-full">
+      <div className="lg:col-span-5 xl:col-span-4 text-slate-800 h-full">
         <VerificationPanel
           registrationState={registrationState}
           setRegistrationState={setRegistrationState}

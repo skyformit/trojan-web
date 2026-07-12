@@ -27,16 +27,16 @@ export default function PortalStepper({
     <section className="relative overflow-hidden rounded-[28px] border border-[color:rgba(44,53,97,0.14)] bg-[radial-gradient(circle_at_3%_18%,rgba(220,225,235,0.9),transparent_20%),radial-gradient(circle_at_90%_18%,rgba(202,227,239,0.8),transparent_16%),linear-gradient(180deg,rgba(247,249,252,1)_0%,rgba(244,246,250,1)_100%)] px-4 py-4 shadow-[0_16px_30px_rgba(15,23,42,0.06)] md:px-7 md:py-5">
       <div className="relative">
         <div
-          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[2.2rem] z-0 hidden h-[3px] rounded-full bg-[color:rgba(214,220,232,0.95)] md:block md:top-[2.5rem]"
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[2.15rem] z-0 hidden h-[2px] rounded-full bg-[color:rgba(214,220,232,0.95)] md:block md:top-[2.4rem]"
           style={{
             boxShadow: '0 0 0 1px rgba(255,255,255,0.85)',
           }}
           aria-hidden="true"
         />
         <div
-          className="pointer-events-none absolute left-[12.5%] z-10 hidden h-[3px] rounded-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-light)] md:block"
+          className="pointer-events-none absolute left-[12.5%] z-10 hidden h-[2px] rounded-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-light)] md:block"
           style={{
-            top: '2.5rem',
+            top: '2.4rem',
             width: `calc(${activeLinePct}% - 12.5%)`,
             maxWidth: '75%',
           }}
@@ -66,33 +66,33 @@ export default function PortalStepper({
             return (
               <div key={step.id} className="relative flex flex-col items-center text-center">
                 <div className="relative z-10 flex w-full flex-col items-center">
-                  <div className={`relative flex h-16 w-16 items-center justify-center rounded-full border-[2px] md:h-[5rem] md:w-[5rem] ${circleClass}`}>
-                    <div className="relative flex h-7 w-7 items-center justify-center rounded-full bg-transparent md:h-8 md:w-8">
+                  <div className={`relative flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full border-[2px] md:h-[4.5rem] md:w-[4.5rem] ${circleClass}`}>
+                    <div className="relative flex h-[1.6rem] w-[1.6rem] items-center justify-center rounded-full bg-transparent md:h-[1.8rem] md:w-[1.8rem]">
                       {isFailed ? (
-                        <XCircle className="h-4 w-4 md:h-[1.25rem] md:w-[1.25rem]" />
+                        <XCircle className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
                       ) : isReview ? (
-                        <AlertCircle className="h-4 w-4 md:h-[1.25rem] md:w-[1.25rem]" />
+                        <AlertCircle className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
                       ) : isCompleted ? (
-                        <Check className="h-4 w-4 md:h-[1.25rem] md:w-[1.25rem]" />
+                        <Check className="h-[0.95rem] w-[0.95rem] md:h-[1.05rem] md:w-[1.05rem]" />
                       ) : (
                         step.icon(isActive, isCompleted)
                       )}
                     </div>
-                  <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-[color:rgba(44,53,97,0.08)] bg-white text-[9px] font-extrabold text-[var(--brand-primary-deep)] shadow-[0_6px_14px_rgba(15,23,42,0.12)] md:h-7 md:w-7 md:text-[9px]">
-                    {step.id}
-                  </span>
-                </div>
+                    <span className="absolute -right-1.5 -top-1.5 flex h-[1.45rem] w-[1.45rem] items-center justify-center rounded-full border border-[color:rgba(44,53,97,0.08)] bg-white text-[8px] font-extrabold text-[var(--brand-primary-deep)] shadow-[0_6px_14px_rgba(15,23,42,0.12)] md:h-[1.65rem] md:w-[1.65rem] md:text-[8px]">
+                      {step.id}
+                    </span>
+                  </div>
 
                   <div className="mt-2.5 space-y-1 md:mt-3.5 md:space-y-1.5">
                     <span
-                      className={`block text-[9px] font-black uppercase tracking-[0.3em] md:text-[10px] md:tracking-[0.32em] ${
+                      className={`block text-[9px] font-black uppercase tracking-[0.28em] md:text-[10px] md:tracking-[0.3em] ${
                         isFailed
                           ? 'text-[var(--brand-primary-deep)]'
                           : isReview
                             ? 'text-[var(--brand-primary-deep)]'
                             : isCurrent || isActive
                               ? 'text-[var(--brand-primary-deep)]'
-                              : 'text-[var(--brand-primary)]/80'
+                              : 'text-[var(--brand-neutral)]'
                       }`}
                     >
                       {step.label}
@@ -101,14 +101,14 @@ export default function PortalStepper({
                     <span
                       className={`mx-auto inline-flex rounded-full border px-2.5 py-[3px] text-[7px] font-extrabold uppercase tracking-[0.24em] md:px-3 md:py-[4px] md:text-[7px] md:tracking-[0.25em] ${
                         isFailed
-                          ? 'border-[color:rgba(44,53,97,0.12)] bg-[color:rgba(83,86,90,0.08)] text-[var(--brand-neutral)]'
+                          ? 'border-[color:rgba(44,53,97,0.14)] bg-[color:rgba(83,86,90,0.10)] text-[var(--brand-neutral)]'
                           : isReview
-                            ? 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-neutral)]'
+                            ? 'border-[color:rgba(44,53,97,0.14)] bg-white text-[var(--brand-neutral)]'
                             : isCompleted || (step.id < currentStepIndex && !isCurrent)
-                                ? 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-neutral)]'
+                                ? 'border-[color:rgba(44,53,97,0.14)] bg-white text-[var(--brand-primary-deep)]'
                               : isCurrent || isActive
                                 ? 'border-[color:rgba(44,53,97,0.18)] bg-[var(--brand-sky)] text-white shadow-[0_8px_18px_rgba(0,142,185,0.22)]'
-                                : 'border-[color:rgba(44,53,97,0.12)] bg-white text-[var(--brand-gray-light)]'
+                                : 'border-[color:rgba(44,53,97,0.14)] bg-white text-[var(--brand-neutral)]'
                       }`}
                     >
                       {isFailed
@@ -122,7 +122,7 @@ export default function PortalStepper({
                               : 'Pending'}
                     </span>
 
-                    <span className="block text-[7px] font-semibold uppercase tracking-[0.24em] text-[color:rgba(118,130,150,0.95)]">
+                    <span className="block text-[8px] font-semibold uppercase tracking-[0.22em] text-[var(--brand-neutral)]/90">
                       {step.desc}
                     </span>
                   </div>

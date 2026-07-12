@@ -49,7 +49,7 @@ export default function ChatMessageBubble({
       )}
 
       <div
-        className={`relative z-10 ${isAgent ? 'max-w-[91%] rounded-[22px] px-5 py-3.5' : 'max-w-[92%] rounded-[24px] px-5 py-3.5'} text-[13px] leading-[1.5] ${
+        className={`relative z-10 ${isAgent ? 'w-full max-w-[80%] rounded-[22px] px-5 py-3.5' : 'max-w-[92%] rounded-[24px] px-5 py-3.5'} text-[13px] leading-[1.5] ${
           isUser
             ? 'bg-gradient-to-br from-[var(--brand-primary)] via-[var(--brand-primary-mid)] to-[var(--brand-sky)] text-white rounded-br-md font-medium shadow-[0_12px_30px_rgba(44,53,97,0.24)]'
             : 'bg-white/97 text-[var(--brand-primary-deep)] border border-[color:rgba(44,53,97,0.14)] rounded-bl-[18px] shadow-[0_18px_40px_rgba(44,53,97,0.08)] ring-1 ring-[color:rgba(44,53,97,0.06)]'
@@ -77,12 +77,12 @@ export default function ChatMessageBubble({
         )}
 
         {isAgent ? (
-          <div className="mt-2 flex items-end justify-between gap-3 text-[9px] font-mono tracking-[0.22em] text-[var(--brand-gray-light)]">
-            <span className="normal-case">Encrypted • end-to-end</span>
-            <span className="tracking-[0.16em] text-[var(--brand-neutral)]">{message.timestamp}</span>
+          <div className="mt-2 flex items-end justify-between gap-3 text-[10px] font-mono tracking-[0.16em] text-[var(--brand-neutral)]">
+            <span className="normal-case font-semibold text-[var(--brand-neutral)]">Encrypted • end-to-end</span>
+            <span className="tracking-[0.14em] text-[var(--brand-primary-deep)]">{message.timestamp}</span>
           </div>
         ) : (
-          <p className={`mt-1 text-[9px] text-right font-mono ${isUser ? 'text-[color:rgba(255,255,255,0.78)]' : 'text-[var(--brand-gray-light)]'}`}>{message.timestamp}</p>
+          <p className={`mt-1 text-[10px] text-right font-mono ${isUser ? 'text-[color:rgba(255,255,255,0.84)]' : 'text-[var(--brand-neutral)]'}`}>{message.timestamp}</p>
         )}
       </div>
     </div>

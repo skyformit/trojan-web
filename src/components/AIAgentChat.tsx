@@ -12,6 +12,7 @@ import VendorLookupResults from './ui/VendorLookupResults';
 interface AIAgentChatProps {
   registrationState: SupplierRegistrationState;
   setRegistrationState: React.Dispatch<React.SetStateAction<SupplierRegistrationState>>;
+  onConversationIdChange?: (conversationId: string | null) => void;
   onAnalyzeDocument: (
     type: 'trade_license' | 'vat_certificate' | 'bank_document',
     file: File | null,
@@ -31,6 +32,7 @@ interface AIAgentChatProps {
 export default function AIAgentChat({
   registrationState,
   setRegistrationState,
+  onConversationIdChange,
   onAnalyzeDocument,
   chatHistory,
   setChatHistory,
@@ -67,6 +69,10 @@ export default function AIAgentChat({
     chatHistory,
     setChatHistory,
   });
+
+  React.useEffect(() => {
+    onConversationIdChange?.(conversationId);
+  }, [conversationId, onConversationIdChange]);
 
   const effectiveUploadType = uploadTypeForCurrentStep;
 
@@ -211,16 +217,14 @@ export default function AIAgentChat({
       ];
 
       return (
-        <div className="max-w-[66ch] space-y-3.5 pr-2">
+        <div className="w-full max-w-none space-y-3.5 pr-2">
           <p className="text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
             Hello and welcome to the <span className="font-semibold text-[var(--brand-sky)]">Secure Supplier Portal!</span> 💎
           </p>
 
-          <p className="text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
-            I am your AI Onboarding Assistant. I am here to guide you step-by-step<br />
-            through our supplier registration program. To align with corporate and<br />
-            compliance standards, we require authentication of{' '}
-            <strong className="font-semibold text-[var(--brand-primary-deep)]">three vital company certificates</strong><br />
+          <p className="w-full text-[14px] leading-[1.42] text-[var(--brand-neutral)]">
+            I am your AI Onboarding Assistant. I am here to guide you step-by-step through our supplier registration program. To align with corporate and compliance standards, we require authentication of{' '}
+            <strong className="font-semibold text-[var(--brand-primary-deep)]">three vital company certificates</strong>{' '}
             in real-time:
           </p>
 
@@ -230,7 +234,7 @@ export default function AIAgentChat({
                 <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[12px] bg-[var(--brand-sky)] text-[13px] font-black text-white shadow-[0_10px_18px_rgba(0,142,185,0.18)] ring-4 ring-[color:rgba(0,142,185,0.10)]">
                   {index + 1}
                 </span>
-                <p className="max-w-[36ch] text-[14px] font-semibold leading-[1.32] text-[var(--brand-primary-deep)]">
+                <p className="max-w-[44ch] text-[14px] font-semibold leading-[1.32] text-[var(--brand-primary-deep)]">
                   {item}
                 </p>
               </div>

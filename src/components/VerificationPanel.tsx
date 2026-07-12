@@ -292,38 +292,40 @@ export default function VerificationPanel({
         <div className="rounded-[18px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(244,248,255,0.98)_0%,rgba(236,243,253,0.98)_46%,rgba(249,250,255,0.99)_100%)] px-3 py-2 shadow-[0_8px_18px_rgba(15,23,42,0.06)] md:px-4 md:py-2.5">
           <p className="text-[11px] font-black uppercase tracking-[0.26em] text-[var(--brand-gray-light)]">Overall Decision</p>
 
-          <div className="mt-2 grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(80px,auto)_minmax(0,1fr)_auto] sm:items-center md:gap-2.5">
-            <div className="relative flex h-[80px] w-[80px] items-center justify-center rounded-full bg-[color:rgba(83,86,90,0.08)] shadow-[inset_0_0_0_1px_rgba(44,53,97,0.10)] md:h-[88px] md:w-[88px]">
-              <div
-                className="absolute inset-0 rounded-full p-[4px] md:p-[5px]"
-                style={scoreRingStyle}
-              >
-                <div className="h-full w-full rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,255,0.98)_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)]" />
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between md:gap-2.5">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="relative flex h-[80px] w-[80px] shrink-0 items-center justify-center rounded-full bg-[color:rgba(83,86,90,0.08)] shadow-[inset_0_0_0_1px_rgba(44,53,97,0.10)] md:h-[88px] md:w-[88px]">
+                <div
+                  className="absolute inset-0 rounded-full p-[4px] md:p-[5px]"
+                  style={scoreRingStyle}
+                >
+                  <div className="h-full w-full rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,255,0.98)_100%)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)]" />
+                </div>
+                <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                  <span className="text-[22px] font-black leading-none tracking-tight text-[var(--brand-primary)] md:text-[26px]">{score}%</span>
+                  <span className="mt-0.5 text-[6px] font-black uppercase tracking-[0.2em] text-[var(--brand-neutral)] md:text-[7px]">Validated</span>
+                </div>
               </div>
-              <div className="relative z-10 flex flex-col items-center justify-center text-center">
-                <span className="text-[22px] font-black leading-none tracking-tight text-[var(--brand-primary)] md:text-[26px]">{score}%</span>
-                <span className="mt-0.5 text-[6px] font-black uppercase tracking-[0.2em] text-[var(--brand-neutral)] md:text-[7px]">Validated</span>
+
+              <div className="flex min-w-0 flex-col justify-center gap-0.5 pt-1 text-[11px] font-medium text-[var(--brand-neutral)] md:pt-1.5 md:text-[13px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
+                  <span>Identity</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
+                  <span>Documents</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
+                  <span>Compliance</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col justify-center gap-0.5 pl-0 text-[12px] font-medium text-[var(--brand-neutral)] md:text-[13px]">
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
-                <span>Identity</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
-                <span>Documents</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-gray-light)]/90" />
-                <span>Compliance</span>
-              </div>
-            </div>
-
-            <div>
+            <div className="shrink-0 text-right sm:pt-1">
               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">Pending</p>
-              <p className="mt-1 text-[16px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[20px]">0 / 3</p>
+              <p className="mt-1 text-[18px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[22px]">0 / 3</p>
               <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-[var(--brand-neutral)]">Awaiting</p>
             </div>
           </div>
@@ -830,7 +832,6 @@ export default function VerificationPanel({
           { key: 'licenseNumber', label: 'License Number' },
           { key: 'companyName', label: 'Extracted Company' },
           { key: 'expiryDate', label: 'Expiry Date' },
-          { key: 'manager', label: 'Manager / Owner' },
           { key: 'licensedActivities', label: 'Licensed Activities' }
         ]
       )}

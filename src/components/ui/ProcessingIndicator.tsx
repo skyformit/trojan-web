@@ -21,9 +21,9 @@ export default function ProcessingIndicator({
             <p className="font-sans text-[10px] leading-[1.35] text-[var(--brand-neutral)]">{description}</p>
           </div>
         </div>
-        <div className="mt-2.5 flex items-end justify-between gap-3 text-[9px] font-mono tracking-[0.22em] text-[var(--brand-gray-light)]">
-          <span className="normal-case">Encrypted • end-to-end</span>
-          <span className="tracking-[0.16em] text-[var(--brand-neutral)]">now</span>
+        <div className="mt-2.5 flex items-end justify-between gap-3 text-[10px] font-mono tracking-[0.16em] text-[var(--brand-neutral)]">
+          <span className="normal-case font-semibold text-[var(--brand-neutral)]">Encrypted • end-to-end</span>
+          <span className="tracking-[0.14em] text-[var(--brand-primary-deep)]">now</span>
         </div>
       </div>
     </div>

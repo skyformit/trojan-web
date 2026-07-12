@@ -927,9 +927,20 @@ export default function App() {
   const [showBackupContactPrompt, setShowBackupContactPrompt] = useState(false);
   const [backupContactAttempted, setBackupContactAttempted] = useState(false);
   const [backupContactErrors, setBackupContactErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [sessionStartedAt] = useState(
     () => `${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })} · GST`
   );
+  const [sessionLabel] = useState(() => {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `TRJ-${yy}${mm}${dd}-${hh}${min}-${rand}`;
+  });
   const orchestratorVendorId = String(
     orchestratorResponse?.vendID ??
     orchestratorResponse?.vendId ??
@@ -1646,7 +1657,7 @@ Next Step: ${friendlyNextStep}`
           }
           title="Secure Supplier Portal"
           subtitle="Real-time OCR compliance validation, and enterprise-grade onboarding."
-          sessionId={String(orchestratorResponse?.context?.conversation_id || 'TRJ-08129-A45')}
+          sessionId={String(orchestratorResponse?.context?.conversation_id || liveConversationId || sessionLabel)}
           startedAt={sessionStartedAt}
         />
 
@@ -1677,6 +1688,7 @@ Next Step: ${friendlyNextStep}`
           submissionComplete={submissionComplete}
           registrationState={registrationState}
           setRegistrationState={setRegistrationState}
+          onConversationIdChange={setLiveConversationId}
           chatHistory={chatHistory}
           setChatHistory={setChatHistory}
           onAnalyzeDocument={handleAnalyzeDocument}
