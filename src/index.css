@@ -64,13 +64,13 @@
 
 :root {
   --brand-primary: #2c3561;
-  --brand-primary-mid: #5162a6;
+  --brand-primary-mid: #334072;
   --brand-primary-hover: #222b54;
   --brand-primary-deep: #1a1a1a;
   --brand-neutral: #53565a;
-  --brand-sky: #1a9cc6;
-  --brand-sky-light: #86c7e3;
-  --brand-sky-accent: #39acd7;
+  --brand-sky: #008eb9;
+  --brand-sky-light: #6db3d9;
+  --brand-sky-accent: #1da0cf;
   --brand-gray-light: #b9babb;
   --brand-beige: #d8cfbc;
   --brand-brown: #b9835a;
@@ -94,4 +94,35 @@ body {
 ::selection {
   background: var(--brand-primary);
   color: #ffffff;
+}
+
+@keyframes ai-orb-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes ai-orb-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ai-orb-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0) scale(1.12);
+  }
 }

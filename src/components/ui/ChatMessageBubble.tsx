@@ -1,6 +1,7 @@
 import { FileText, CheckCircle2, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ChatMessage } from '../../types';
+import AnimatedAiOrb from './AnimatedAiOrb';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -59,9 +60,7 @@ export default function ChatMessageBubble({
       )}
 
       {!isUser && (
-        <div className="relative z-10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand-primary)] via-[var(--brand-primary-mid)] to-[var(--brand-sky)] text-white border-2 border-white shadow-[0_10px_24px_rgba(44,53,97,0.28)] text-[10px] font-extrabold md:h-10 md:w-10">
-          AI
-        </div>
+        <AnimatedAiOrb variant="chat" className="relative z-10 mt-0.5" />
       )}
 
       <div

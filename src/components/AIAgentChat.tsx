@@ -3,6 +3,7 @@ import { Send, CheckCircle2, ShieldAlert, RefreshCw, Sparkles, Paperclip, Mic } 
 import { ChatMessage, SupplierRegistrationState } from '../types';
 import { composeUaeMobileNumber, getVendorBadgeLabel, UAE_MOBILE_PREFIX_OPTIONS } from '../utils/chatWorkflow';
 import { useAIAgentChatController } from '../hooks/useAIAgentChatController';
+import AnimatedAiOrb from './ui/AnimatedAiOrb';
 import ChatMessageBubble from './ui/ChatMessageBubble';
 import ContactSetupCard from './ui/ContactSetupCard';
 import ProcessingIndicator from './ui/ProcessingIndicator';
@@ -443,10 +444,7 @@ export default function AIAgentChat({
       {/* Chat header */}
       <div className="flex items-center justify-between border-b border-[color:rgba(213,221,232,0.95)] bg-white/95 px-5 py-2 md:px-6 md:py-2.5">
         <div className="flex items-center gap-3 md:gap-3.5">
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-[12px] bg-gradient-to-br from-[var(--brand-primary)] via-[var(--brand-primary-mid)] to-[var(--brand-sky)] text-white shadow-[0_12px_22px_rgba(44,53,97,0.22)] ring-4 ring-[color:rgba(44,53,97,0.05)] md:h-11 md:w-11 md:rounded-[14px]">
-            <Sparkles className="h-[13px] w-[13px] md:h-[15px] md:w-[15px]" />
-            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-[2px] border-white bg-[var(--brand-success)] shadow-[0_0_0_2px_rgba(25,184,107,0.08)]" />
-          </div>
+          <AnimatedAiOrb variant="header" showStatus className="ring-4 ring-[color:rgba(44,53,97,0.05)] shadow-[0_12px_22px_rgba(44,53,97,0.22)]" />
           <div>
             <h2 className="text-[16px] font-black tracking-tight text-[var(--brand-primary-deep)] md:text-[18px]">
               Onboarding Officer <span className="font-semibold text-[var(--brand-neutral)]">(AI Agent)</span>
