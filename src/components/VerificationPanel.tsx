@@ -279,8 +279,8 @@ export default function VerificationPanel({
 
   const buildDocumentSummaryRows = (doc: DocumentVerification) => {
     const decisionReasonInfo = getDecisionReasonInfo(doc);
-
-    return [
+    const isVatDocument = String(doc.documentAcceptance?.document_type || doc.type || '').toLowerCase().includes('vat');
+    const rows = [
       { label: 'Document Type', value: formatAcceptanceValue(doc.documentAcceptance?.document_type) },
       { label: 'Final Decision', value: formatAcceptanceValue(decisionReasonInfo.displayStatus || doc.documentAcceptance?.status) },
       { label: 'Decision Score', value: formatAcceptanceValue(doc.documentAcceptance?.score) },
@@ -294,10 +294,18 @@ export default function VerificationPanel({
           </ul>
         ) : formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance?.missing_fields)),
       },
-      { label: 'Expiry Date', value: formatAcceptanceValue(doc.documentAcceptance?.expiry_date) },
-      { label: 'Expired', value: formatAcceptanceValue(doc.documentAcceptance?.is_expired) },
-      { label: 'Ready for Approval', value: formatAcceptanceValue(doc.documentAcceptance?.acceptable) },
     ];
+
+    if (!isVatDocument) {
+      rows.push(
+        { label: 'Expiry Date', value: formatAcceptanceValue(doc.documentAcceptance?.expiry_date) },
+        { label: 'Expired', value: formatAcceptanceValue(doc.documentAcceptance?.is_expired) }
+      );
+    }
+
+    rows.push({ label: 'Ready for Approval', value: formatAcceptanceValue(doc.documentAcceptance?.acceptable) });
+
+    return rows;
   };
 
   const normalizeDetailValue = (value: unknown) => {
