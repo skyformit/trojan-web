@@ -23,7 +23,7 @@ const variantStyles: Record<AnimatedAiOrbVariant, { outer: string }> = {
 };
 
 const outerPadding: Record<AnimatedAiOrbVariant, string> = {
-  header: 'p-[2px]',
+  header: 'p-0',
   chat: 'p-[1px]',
   loading: 'p-[1px]',
 };
@@ -33,8 +33,6 @@ const lottieStyle: CSSProperties = {
   height: '100%',
   display: 'block',
   background: 'transparent',
-  transform: 'scale(1.12)',
-  transformOrigin: 'center center',
 };
 
 export default function AnimatedAiOrb({
@@ -55,7 +53,7 @@ export default function AnimatedAiOrb({
           loop
           autoplay
           style={lottieStyle}
-          rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
+          rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
         />
       </div>
       {showStatus && (

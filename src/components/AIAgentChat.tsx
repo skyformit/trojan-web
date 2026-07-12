@@ -444,7 +444,7 @@ export default function AIAgentChat({
       {/* Chat header */}
       <div className="flex items-center justify-between border-b border-[color:rgba(213,221,232,0.95)] bg-white/95 px-5 py-2 md:px-6 md:py-2.5">
         <div className="flex items-center gap-3 md:gap-3.5">
-          <AnimatedAiOrb variant="header" showStatus className="ring-4 ring-[color:rgba(44,53,97,0.05)] shadow-[0_12px_22px_rgba(44,53,97,0.22)]" />
+          <AnimatedAiOrb variant="header" showStatus />
           <div>
             <h2 className="text-[16px] font-black tracking-tight text-[var(--brand-primary-deep)] md:text-[18px]">
               Onboarding Officer <span className="font-semibold text-[var(--brand-neutral)]">(AI Agent)</span>
