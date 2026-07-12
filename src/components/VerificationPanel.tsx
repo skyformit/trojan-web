@@ -122,6 +122,35 @@ export default function VerificationPanel({
     return reason;
   };
 
+  const isPositiveVerificationReason = (reason: string) => {
+    const normalized = reason.toLowerCase();
+
+    if (!normalized) {
+      return false;
+    }
+
+    if (
+      normalized.includes('missing') ||
+      normalized.includes('expired') ||
+      normalized.includes('does not match') ||
+      normalized.includes('mismatch') ||
+      normalized.includes('rejected') ||
+      normalized.includes('failed') ||
+      normalized.includes('not found')
+    ) {
+      return false;
+    }
+
+    return (
+      normalized.includes('qr code was detected') ||
+      normalized.includes('official verification link was found') ||
+      normalized.includes('company logo was detected') ||
+      normalized.includes('issuing authority present') ||
+      normalized.includes('verification signals') ||
+      normalized.includes('reviewed as part of the verification process')
+    );
+  };
+
   const getAcceptanceDisplayStatus = (doc: DocumentVerification) => {
     const acceptance = doc.documentAcceptance;
     const mismatchStatus = String(acceptance?.company_match?.match_status || acceptance?.tbms_match?.status || '').toLowerCase();
@@ -296,21 +325,58 @@ export default function VerificationPanel({
   const buildDocumentSummaryRows = (doc: DocumentVerification) => {
     const decisionReasonInfo = getDecisionReasonInfo(doc);
     const isVatDocument = String(doc.documentAcceptance?.document_type || doc.type || '').toLowerCase().includes('vat');
-    const rows = [
+    const documentAcceptanceStatus = String(doc.documentAcceptance?.status || '').toLowerCase();
+    const positiveVerificationSignals = Array.isArray(doc.documentAcceptance?.reasons)
+      ? doc.documentAcceptance.reasons
+          .filter(reason => isPositiveVerificationReason(String(reason)))
+          .map(reason => formatAcceptanceReasonText(String(reason)))
+          .filter(Boolean)
+      : [];
+    const missingFields = formatMissingFieldLabels(doc.documentAcceptance?.missing_fields);
+    const shouldShowDecisionReasons =
+      decisionReasonInfo.reasons.length > 0 &&
+      (decisionReasonInfo.displayStatus === 'rejected' || decisionReasonInfo.displayStatus === 'expired' || documentAcceptanceStatus === 'rejected' || documentAcceptanceStatus === 'expired');
+    const shouldShowMissingFields =
+      !shouldShowDecisionReasons &&
+      decisionReasonInfo.displayStatus !== 'approved' &&
+      missingFields.length > 0;
+    const shouldShowVerificationSignals =
+      decisionReasonInfo.displayStatus === 'approved' &&
+      positiveVerificationSignals.length > 0;
+    const rows: Array<{ label: string; value: React.ReactNode }> = [
       { label: 'Document Type', value: formatAcceptanceValue(doc.documentAcceptance?.document_type) },
       { label: 'Final Decision', value: formatAcceptanceValue(decisionReasonInfo.displayStatus || doc.documentAcceptance?.status) },
       { label: 'Decision Score', value: formatAcceptanceValue(getDecisionScoreValue(doc)) },
-      {
-        label: decisionReasonInfo.hasDecisionReasons ? 'Decision Reasons' : 'Missing Fields',
-        value: decisionReasonInfo.reasons.length > 0 ? (
+    ];
+
+    if (shouldShowDecisionReasons) {
+      rows.push({
+        label: 'Decision Reasons',
+        value: (
           <ul className="space-y-1 list-disc list-inside">
             {decisionReasonInfo.reasons.map((reason, index) => (
               <li key={`${reason}-${index}`}>{reason}</li>
             ))}
           </ul>
-        ) : formatAcceptanceValue(formatMissingFieldLabels(doc.documentAcceptance?.missing_fields)),
-      },
-    ];
+        ),
+      });
+    } else if (shouldShowMissingFields) {
+      rows.push({
+        label: 'Missing Fields',
+        value: formatAcceptanceValue(missingFields),
+      });
+    } else if (shouldShowVerificationSignals) {
+      rows.push({
+        label: 'Verification Signals',
+        value: (
+          <ul className="space-y-1 list-disc list-inside">
+            {positiveVerificationSignals.map((reason, index) => (
+              <li key={`${reason}-${index}`}>{reason}</li>
+            ))}
+          </ul>
+        ),
+      });
+    }
 
     if (doc.type === 'trade_license' && !isVatDocument) {
       rows.push(
