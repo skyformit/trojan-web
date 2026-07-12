@@ -63,14 +63,14 @@
 }
 
 :root {
-  --brand-primary: #2c3561;
-  --brand-primary-mid: #334072;
-  --brand-primary-hover: #222b54;
+  --brand-primary: #435f9a;
+  --brand-primary-mid: #617cbb;
+  --brand-primary-hover: #345089;
   --brand-primary-deep: #1a1a1a;
   --brand-neutral: #53565a;
-  --brand-sky: #008eb9;
-  --brand-sky-light: #6db3d9;
-  --brand-sky-accent: #1da0cf;
+  --brand-sky: #259fcb;
+  --brand-sky-light: #82c8e5;
+  --brand-sky-accent: #44b1d9;
   --brand-gray-light: #b9babb;
   --brand-beige: #d8cfbc;
   --brand-brown: #b9835a;
@@ -86,7 +86,7 @@ body,
 }
 
 body {
-  background: linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #f7f9fd 0%, #ffffff 100%);
   color: var(--brand-primary-deep);
   overflow: hidden;
 }
