@@ -49,11 +49,11 @@ export default function ChatMessageBubble({
       {showAgentRail && (
         <>
           <div
-            className="pointer-events-none absolute left-0 top-[1.9rem] bottom-0 z-0 w-[36px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.56)] via-[color:rgba(0,142,185,0.86)] via-[55%] to-transparent blur-[1px] shadow-[0_0_40px_rgba(0,142,185,0.30)]"
+            className="pointer-events-none absolute left-[1px] top-[2.60rem] bottom-0 z-0 w-[36px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.56)] via-[color:rgba(0,142,185,0.86)] via-[55%] to-transparent blur-[1px] shadow-[0_0_40px_rgba(0,142,185,0.30)]"
             aria-hidden="true"
           />
           <div
-            className="pointer-events-none absolute left-[-18px] top-[1.9rem] bottom-0 z-0 w-[72px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.14)] via-[color:rgba(0,142,185,0.16)] to-transparent blur-[28px]"
+            className="pointer-events-none absolute left-[-16px] top-[2.60rem] bottom-0 z-0 w-[72px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.14)] via-[color:rgba(0,142,185,0.16)] to-transparent blur-[28px]"
             aria-hidden="true"
           />
         </>
