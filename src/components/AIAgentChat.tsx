@@ -439,8 +439,6 @@ export default function AIAgentChat({
   return (
     <div className="relative flex h-[min(600px,calc(100dvh-14rem))] flex-col overflow-hidden rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,255,0.98)_0%,rgba(245,248,255,0.96)_22%,rgba(241,246,255,0.92)_100%)] shadow-[0_20px_54px_rgba(15,23,42,0.10)] md:h-[600px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] rounded-r-full bg-gradient-to-r from-[var(--brand-primary)] via-[var(--brand-sky)] to-[var(--brand-sky-accent)] shadow-[0_0_0_1px_rgba(44,53,97,0.04)] md:h-[3px]" />
-      <div className="pointer-events-none absolute left-[-2px] top-[4.25rem] h-[calc(100%-7.5rem)] w-[3px] rounded-full bg-gradient-to-b from-[color:rgba(44,53,97,0.55)] via-[color:rgba(0,142,185,0.55)] to-transparent" />
-      <div className="pointer-events-none absolute left-[-10px] top-[4.25rem] h-[calc(100%-7.5rem)] w-8 rounded-full bg-gradient-to-b from-[color:rgba(44,53,97,0.26)] via-[color:rgba(0,142,185,0.24)] to-transparent blur-3xl" />
 
       {/* Chat header */}
       <div className="flex items-center justify-between border-b border-[color:rgba(213,221,232,0.95)] bg-white/95 px-5 py-2 md:px-6 md:py-2.5">
@@ -467,7 +465,7 @@ export default function AIAgentChat({
       </div>
 
       {/* Messages Scroll Frame */}
-      <div className="relative flex-1 overflow-y-auto px-4 py-1.5 space-y-1 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.12),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.06),_transparent_18%),linear-gradient(180deg,_rgba(250,252,255,0.98),_rgba(243,247,255,0.96))]">
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-1.5 space-y-1 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_32%),radial-gradient(circle_at_12%_55%,_rgba(99,102,241,0.12),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(125,211,252,0.06),_transparent_18%),linear-gradient(180deg,_rgba(250,252,255,0.98),_rgba(243,247,255,0.96))]">
         {chatHistory.map((msg) => (
           <React.Fragment key={msg.id}>
             <ChatMessageBubble

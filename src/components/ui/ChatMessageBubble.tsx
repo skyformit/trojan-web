@@ -15,6 +15,8 @@ export default function ChatMessageBubble({
   isUploading = false,
   renderText,
 }: ChatMessageBubbleProps) {
+  const normalizedText = message.text.replace(/\r\n/g, '\n').trim();
+
   if (message.sender === 'system') {
     const shouldSpin = isUploading && isLatestSystemMessage;
     return (
@@ -39,9 +41,23 @@ export default function ChatMessageBubble({
 
   const isUser = message.sender === 'user';
   const isAgent = message.sender === 'agent';
+  const showAgentRail = isAgent;
 
   return (
-    <div className={`relative flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-2.5 ${isAgent ? 'pl-1' : ''}`}>
+    <div className={`relative flex ${isUser ? 'justify-end' : 'justify-start'} items-start gap-2.5`}>
+      {showAgentRail && (
+        <>
+          <div
+            className="pointer-events-none absolute left-0 top-[1.9rem] bottom-0 z-0 w-[36px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.56)] via-[color:rgba(0,142,185,0.86)] via-[55%] to-transparent blur-[1px] shadow-[0_0_40px_rgba(0,142,185,0.30)]"
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute left-[-18px] top-[1.9rem] bottom-0 z-0 w-[72px] rounded-b-full rounded-t-none bg-gradient-to-b from-[color:rgba(26,37,77,0.14)] via-[color:rgba(0,142,185,0.16)] to-transparent blur-[28px]"
+            aria-hidden="true"
+          />
+        </>
+      )}
+
       {!isUser && (
         <div className="relative z-10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand-primary)] via-[var(--brand-primary-mid)] to-[var(--brand-sky)] text-white border-2 border-white shadow-[0_10px_24px_rgba(44,53,97,0.28)] text-[10px] font-extrabold md:h-10 md:w-10">
           AI
