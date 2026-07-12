@@ -564,7 +564,7 @@ export default function VerificationPanel({
                   <UserCheck className="w-3.5 h-3.5 text-[var(--brand-sky)]" />
                   <span>Onboarding Credentials Approved</span>
                 </div>
-                AI Agent validation confirms that all document IDs are globally validated. Under Trojan General Contracting onboarding protocol, please complete the commercial and operational survey below to publish your submission.
+                AI Agent validation confirms that all document IDs are globally validated. Under Trojan Construction Holding onboarding protocol, please complete the commercial and operational survey below to publish your submission.
               </div>
 
               {/* Infrastructure & Capabilities Survey Section */}
