@@ -353,7 +353,7 @@ export default function VerificationPanel({
               </div>
             </div>
           ) : (
-            <p className="rounded-[14px] border border-[color:rgba(44,53,97,0.1)] bg-white/70 px-3 py-2.5 text-[10px] italic text-[var(--brand-neutral)] shadow-[0_6px_14px_rgba(15,23,42,0.04)]">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
+            <p className="rounded-[14px] border border-[color:rgba(44,53,97,0.1)] bg-white/70 px-3 py-2.5 text-[12px] leading-[1.45] italic text-[var(--brand-neutral)] shadow-[0_6px_14px_rgba(15,23,42,0.04)]">No notification settings filed. We'll collect configuration details in Step 2 of the AI Agent chat.</p>
           )}
         </div>
 

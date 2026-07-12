@@ -1638,14 +1638,14 @@ Next Step: ${friendlyNextStep}`
   ];
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8f9fb_0%,#ffffff_100%)] font-sans text-[var(--brand-primary-deep)] flex flex-col selection:bg-[var(--brand-primary)] selection:text-white">
+    <div className="h-dvh overflow-hidden bg-[linear-gradient(180deg,#f8f9fb_0%,#ffffff_100%)] font-sans text-[var(--brand-primary-deep)] flex flex-col selection:bg-[var(--brand-primary)] selection:text-white">
       <style>{`
         @keyframes tbms-submit-shimmer {
           0% { transform: translateX(-120%); }
           100% { transform: translateX(320%); }
         }
       `}</style>
-      <main className="flex-1 w-full max-w-[1680px] mx-auto p-3 sm:p-4 md:p-6 space-y-6">
+      <main className="flex-1 min-h-0 w-full max-w-[1680px] mx-auto overflow-hidden px-3 pt-4 pb-3 sm:px-4 sm:pt-4 sm:pb-3 md:px-6 md:pt-5 md:pb-4 space-y-3 md:space-y-4">
         <PortalHeader
           label="Live onboarding session"
           logo={

@@ -588,9 +588,9 @@ export default function AIAgentChat({
                 </button>
               </div>
             </div>
-            <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-[var(--brand-gray-light)]">
-              <span>Press ↵ to send · ⇧↵ for a new line</span>
-              <span className="inline-flex items-center gap-1">
+            <div className="mt-1.5 flex flex-col gap-1 px-1 text-[11px] leading-[1.35] text-[var(--brand-gray-light)] sm:flex-row sm:items-center sm:justify-between">
+              <span className="font-medium">Press ↵ to send · ⇧↵ for a new line</span>
+              <span className="inline-flex items-center gap-1 font-medium">
                 <span className="h-2 w-2 rounded-full bg-[var(--brand-sky)]" />
                 Secured by Trojan Cloud
               </span>
