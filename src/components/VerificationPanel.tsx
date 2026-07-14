@@ -274,6 +274,10 @@ export default function VerificationPanel({
   const verifiedCount = [trade_license, vat_certificate, bank_document].filter(
     (doc) => getEffectiveDocStatus(doc) === 'verified'
   ).length;
+  const overallStateLabel = score === 100 ? 'Completed' : 'Pending';
+  const overallStateTone = score === 100
+    ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+    : 'text-amber-600 bg-amber-50 border-amber-200';
 
   const getDecisionReasonInfo = (doc: DocumentVerification) => {
     const displayStatus = getAcceptanceDisplayStatus(doc);
@@ -454,7 +458,9 @@ export default function VerificationPanel({
             </div>
 
             <div className="shrink-0 text-right sm:pt-1">
-              <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500">Pending</p>
+              <p className={`text-[8px] font-black uppercase tracking-[0.2em] border px-2 py-0.5 rounded-full inline-block ${overallStateTone}`}>
+                {overallStateLabel}
+              </p>
               <p className="mt-1 text-[18px] font-black leading-none text-[var(--brand-primary-deep)] md:text-[22px]">{verifiedCount} / 3</p>
               <p className="mt-1 text-[8px] font-black uppercase tracking-[0.18em] text-[var(--brand-neutral)]">Awaiting</p>
             </div>

@@ -546,10 +546,11 @@ function buildReconciliationPayload(
 ) {
   const agentDocumentType = getAgentDecisionDocumentType(documentType);
   const parsedContextHint = parseMaybeJson(uploadContext?.contextHint);
+  const typedCompanyName = String(registrationState.companyName || '').trim();
   const requestedCompanyName =
+    typedCompanyName ||
     pickBestCompanyName(
       uploadContext?.companyName,
-      registrationState.companyName,
       extractionResponse.extractedData?.companyName,
       extractionResponse.extractedData?.businessName,
       extractionResponse.extractedData?.legalNameEnglish,
@@ -939,7 +940,7 @@ const initialRegistrationState: SupplierRegistrationState = {
 };
 
 export default function App() {
-  const USE_LOCAL_SUCCESS_FLOW = true;
+  const USE_LOCAL_SUCCESS_FLOW = false;
   const [registrationState, setRegistrationState] = useState<SupplierRegistrationState>(initialRegistrationState);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([createWelcomeMessage()]);
   const [registryRecords, setRegistryRecords] = useState<any[]>([]);
